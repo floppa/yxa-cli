@@ -61,6 +61,7 @@ func executeCommand(cmdName string) error {
 
 	// Execute the command
 	fmt.Printf("Executing command '%s'...\n", cmdName)
+	// #nosec G204 -- This is intentional as executing shell commands is the core functionality of this CLI
 	shellCmd := exec.Command("sh", "-c", cmd.Run)
 	shellCmd.Stdout = os.Stdout
 	shellCmd.Stderr = os.Stderr
@@ -89,10 +90,14 @@ func init() {
 	for name, cmd := range cfg.Commands {
 		// Create a copy of the variables for the closure
 		cmdName := name
-		cmdRun := cmd.Run
 
-		// Format the short description to show dependencies
-		shortDesc := fmt.Sprintf("Run '%s'", cmdRun)
+		// Use the command description if available, otherwise use a generic description
+		shortDesc := cmd.Description
+		if shortDesc == "" {
+			shortDesc = fmt.Sprintf("Execute the '%s' command", cmdName)
+		}
+
+		// Add dependency information if present
 		if len(cmd.Depends) > 0 {
 			shortDesc += fmt.Sprintf(" (depends on: %s)", strings.Join(cmd.Depends, ", "))
 		}

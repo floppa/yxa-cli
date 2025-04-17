@@ -14,22 +14,27 @@ commands:
   # Build the CLI
   build:
     run: go build ${LDFLAGS} -o ${BINARY_NAME} .
+    description: Build the CLI binary
 
   # Run tests
   test:
     run: go test -v -race ./...
+    description: Run all tests with race detection
 
   # Clean build artifacts
   clean:
     run: rm -f ${BINARY_NAME} && rm -rf ${DIST_DIR}
+    description: Remove build artifacts and distribution directory
 
   # Install locally
   install:
     run: sudo mv ${BINARY_NAME} /usr/local/bin/${BINARY_NAME}
     depends: [build]
+    description: Install the CLI to /usr/local/bin
 
   # Create a new release
   release:
+    description: Create and push a new version tag
     run: |
       echo "Creating new release..."
       # Get the current tag
@@ -71,6 +76,7 @@ commands:
 
   # Build for all platforms
   dist:
+    description: Build binaries for all supported platforms
     run: |
       mkdir -p ${DIST_DIR}
       GOOS=linux GOARCH=amd64 go build ${LDFLAGS} -o ${DIST_DIR}/${BINARY_NAME}-linux-amd64 .
@@ -83,9 +89,11 @@ commands:
   # Run linting
   lint:
     run: golangci-lint run
+    description: Run linting checks on the codebase
 
   # Show version information
   version:
+    description: Display the current version
     run: |
       if [ -z "$(git describe --tags --exact-match 2>/dev/null)" ]; then
         echo "Development version ($(git rev-parse --short HEAD))"

@@ -103,21 +103,21 @@ jobs:
             
             ### Linux (amd64)
             ```
-            curl -L https://github.com/magnuseriksson/yxa-cli/releases/latest/download/yxa-linux-amd64 -o yxa
+            curl -L https://github.com/floppa/yxa-cli/releases/latest/download/yxa-linux-amd64 -o yxa
             chmod +x yxa
             sudo mv yxa /usr/local/bin/
             ```
-            
+
             ### macOS (Intel)
             ```
-            curl -L https://github.com/magnuseriksson/yxa-cli/releases/latest/download/yxa-darwin-amd64 -o yxa
+            curl -L https://github.com/floppa/yxa-cli/releases/latest/download/yxa-darwin-amd64 -o yxa
             chmod +x yxa
             sudo mv yxa /usr/local/bin/
             ```
             
             ### macOS (Apple Silicon)
             ```
-            curl -L https://github.com/magnuseriksson/yxa-cli/releases/latest/download/yxa-darwin-arm64 -o yxa
+            curl -L https://github.com/floppa/yxa-cli/releases/latest/download/yxa-darwin-arm64 -o yxa
             chmod +x yxa
             sudo mv yxa /usr/local/bin/
             ```

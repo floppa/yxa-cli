@@ -156,6 +156,7 @@ The `yxa.yml` file should be placed in the root directory of your project. It ha
 - `commands`: A map of command definitions
   - Each command has a name (key) and the following properties:
     - `run`: The shell command to execute
+    - `description` (optional): A short description of what the command does
     - `depends` (optional): A list of command names that should be executed before this command
 
 ### Command Chaining
@@ -168,15 +169,19 @@ For example:
 commands:
   build:
     run: go build -o myapp .
+    description: Build the application binary
   
   test:
     run: go test ./...
+    description: Run all tests
   
   lint:
     run: golangci-lint run
+    description: Run linting checks
   
   release:
     run: ./scripts/release.sh
+    description: Create a new release
     depends: [build, test, lint]  # These commands will run before release
 ```
 
@@ -208,10 +213,13 @@ variables:
 commands:
   build:
     run: go build -o $BUILD_DIR/app $PROJECT_DIR/...
+    description: Build the application
   test:
     run: go test ${TEST_FLAGS} ./...
+    description: Run tests with race detection
   env:
     run: echo "GOPATH=$GOPATH"
+    description: Show GOPATH environment variable
 ```
 
 ### .env File Support
@@ -232,6 +240,30 @@ API_KEY=your-secret-key-here
 ```
 
 These variables can be used in your commands just like YAML variables:
+
+## Security Considerations
+
+Yxa CLI is designed to execute shell commands defined in a configuration file. By its nature, this involves certain security implications that users should be aware of:
+
+### Command Execution
+
+The CLI executes shell commands using `sh -c`. This is a core feature of the tool but comes with security implications:
+
+- **Only use yxa.yml files from trusted sources**: Since the CLI will execute any command in the configuration file, you should only use configuration files from trusted sources.
+- **Be careful with variable substitution**: Variables can come from the environment or `.env` files, so ensure sensitive data is properly protected.
+
+### File Access
+
+The CLI reads configuration files from the current directory:
+
+- **Config file location**: The tool expects to find `yxa.yml` in the current directory. This is by design but requires users to be in the correct directory when running commands.
+- **Environment variables**: Sensitive information can be stored in `.env` files rather than directly in the `yxa.yml` file.
+
+### Best Practices
+
+1. **Review commands before execution**: Always review the commands in `yxa.yml` before running them.
+2. **Use `.env` for secrets**: Store sensitive information like API keys in `.env` files which are not committed to version control.
+3. **Limit command scope**: Design commands to have the minimum necessary permissions and scope.
 
 ## License
 

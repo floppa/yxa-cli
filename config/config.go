@@ -22,8 +22,9 @@ type ProjectConfig struct {
 
 // Command represents a command defined in the project.yml file
 type Command struct {
-	Run     string   `yaml:"run"`
-	Depends []string `yaml:"depends,omitempty"`
+	Run         string   `yaml:"run"`
+	Depends     []string `yaml:"depends,omitempty"`
+	Description string   `yaml:"description,omitempty"`
 }
 
 // LoadConfig loads the project configuration from the yxa.yml file
@@ -37,6 +38,7 @@ func LoadConfig() (*ProjectConfig, error) {
 	}
 
 	// Read the file
+	// #nosec G304 -- This is intentional as reading the config file is the core functionality
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read yxa.yml: %w", err)
