@@ -16,14 +16,24 @@ func TestCommandChaining(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		err := os.RemoveAll(tempDir)
+		if err != nil {
+			t.Logf("Warning: Failed to remove temp dir %s: %v", tempDir, err)
+		}
+	}()
 
 	// Save current directory to return to it later
 	currentDir, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("Failed to get current directory: %v", err)
 	}
-	defer os.Chdir(currentDir)
+	defer func() {
+		err := os.Chdir(currentDir)
+		if err != nil {
+			t.Logf("Warning: Failed to change back to original directory: %v", err)
+		}
+	}()
 
 	// Change to the temporary directory
 	if err := os.Chdir(tempDir); err != nil {
@@ -118,7 +128,9 @@ func TestCommandChaining(t *testing.T) {
 			}
 
 			// Restore stdout
-			w.Close()
+			if err := w.Close(); err != nil {
+				t.Fatalf("Failed to close pipe writer: %v", err)
+			}
 			os.Stdout = oldStdout
 			_, err = io.Copy(io.Discard, r)
 			if err != nil {

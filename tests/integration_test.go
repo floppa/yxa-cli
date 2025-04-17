@@ -18,14 +18,24 @@ func TestCommandExecution(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		err := os.RemoveAll(tempDir)
+		if err != nil {
+			t.Logf("Warning: Failed to remove temp dir %s: %v", tempDir, err)
+		}
+	}()
 
 	// Save current directory to return to it later
 	currentDir, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("Failed to get current directory: %v", err)
 	}
-	defer os.Chdir(currentDir)
+	defer func() {
+		err := os.Chdir(currentDir)
+		if err != nil {
+			t.Logf("Warning: Failed to change back to original directory: %v", err)
+		}
+	}()
 
 	// Change to the temporary directory
 	if err := os.Chdir(tempDir); err != nil {
@@ -101,14 +111,24 @@ func TestComplexBashCommands(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		err := os.RemoveAll(tempDir)
+		if err != nil {
+			t.Logf("Warning: Failed to remove temp dir %s: %v", tempDir, err)
+		}
+	}()
 
 	// Save current directory to return to it later
 	currentDir, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("Failed to get current directory: %v", err)
 	}
-	defer os.Chdir(currentDir)
+	defer func() {
+		err := os.Chdir(currentDir)
+		if err != nil {
+			t.Logf("Warning: Failed to change back to original directory: %v", err)
+		}
+	}()
 
 	// Change to the temporary directory
 	if err := os.Chdir(tempDir); err != nil {
@@ -172,14 +192,24 @@ func TestConfigWithBashCommands(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		err := os.RemoveAll(tempDir)
+		if err != nil {
+			t.Logf("Warning: Failed to remove temp dir %s: %v", tempDir, err)
+		}
+	}()
 
 	// Save current directory to return to it later
 	currentDir, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("Failed to get current directory: %v", err)
 	}
-	defer os.Chdir(currentDir)
+	defer func() {
+		err := os.Chdir(currentDir)
+		if err != nil {
+			t.Logf("Warning: Failed to change back to original directory: %v", err)
+		}
+	}()
 
 	// Change to the temporary directory
 	if err := os.Chdir(tempDir); err != nil {

@@ -12,7 +12,12 @@ func TestCommandDependencies(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		err := os.RemoveAll(tempDir)
+		if err != nil {
+			t.Logf("Warning: Failed to remove temp dir %s: %v", tempDir, err)
+		}
+	}()
 
 	// Save current directory to return to it later
 	currentDir, err := os.Getwd()

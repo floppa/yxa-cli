@@ -12,7 +12,12 @@ func TestVariableSubstitutionInCommands(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer os.RemoveAll(tempDir)
+	defer func() {
+		err := os.RemoveAll(tempDir)
+		if err != nil {
+			t.Logf("Warning: Failed to remove temp dir %s: %v", tempDir, err)
+		}
+	}()
 
 	// Save current directory to return to it later
 	currentDir, err := os.Getwd()
@@ -60,8 +65,14 @@ API_KEY=secret-key
 	}
 
 	// Set a system environment variable for testing
-	os.Setenv("SYSTEM_ENV_VAR", "system-value")
-	defer os.Unsetenv("SYSTEM_ENV_VAR")
+	if err := os.Setenv("SYSTEM_ENV_VAR", "system-value"); err != nil {
+		t.Fatalf("Failed to set environment variable: %v", err)
+	}
+	defer func() {
+		if err := os.Unsetenv("SYSTEM_ENV_VAR"); err != nil {
+			t.Logf("Warning: Failed to unset environment variable: %v", err)
+		}
+	}()
 
 	// Load the config
 	cfg, err := LoadConfig()
@@ -163,15 +174,31 @@ API_KEY=secret-key
 		}
 
 		// Set system environment variable
-		os.Setenv("PRIORITY_VAR", "from-system") // Should be overridden by YAML and .env
-		os.Setenv("COMMON_VAR", "from-system")   // Should be overridden by YAML and .env
-		os.Setenv("ENV_ONLY_VAR", "from-system") // Should be overridden by .env
-		os.Setenv("SYSTEM_ONLY_VAR", "from-system")
+		if err := os.Setenv("PRIORITY_VAR", "from-system"); err != nil { // Should be overridden by YAML and .env
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		if err := os.Setenv("COMMON_VAR", "from-system"); err != nil { // Should be overridden by YAML and .env
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		if err := os.Setenv("ENV_ONLY_VAR", "from-system"); err != nil { // Should be overridden by .env
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
+		if err := os.Setenv("SYSTEM_ONLY_VAR", "from-system"); err != nil {
+			t.Fatalf("Failed to set environment variable: %v", err)
+		}
 		defer func() {
-			os.Unsetenv("PRIORITY_VAR")
-			os.Unsetenv("COMMON_VAR")
-			os.Unsetenv("ENV_ONLY_VAR")
-			os.Unsetenv("SYSTEM_ONLY_VAR")
+			if err := os.Unsetenv("PRIORITY_VAR"); err != nil {
+				t.Logf("Warning: Failed to unset environment variable: %v", err)
+			}
+			if err := os.Unsetenv("COMMON_VAR"); err != nil {
+				t.Logf("Warning: Failed to unset environment variable: %v", err)
+			}
+			if err := os.Unsetenv("ENV_ONLY_VAR"); err != nil {
+				t.Logf("Warning: Failed to unset environment variable: %v", err)
+			}
+			if err := os.Unsetenv("SYSTEM_ONLY_VAR"); err != nil {
+				t.Logf("Warning: Failed to unset environment variable: %v", err)
+			}
 		}()
 
 		testCases := []struct {
