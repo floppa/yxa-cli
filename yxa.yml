@@ -1,0 +1,61 @@
+name: yxa-cli
+
+# Variables defined here can be used in commands with $VAR_NAME or ${VAR_NAME} syntax
+variables:
+  BINARY_NAME: yxa
+  VERSION: dev
+  BUILD_TIME: $(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  LDFLAGS: -ldflags "-s -w -X main.version=${VERSION} -X main.buildTime=${BUILD_TIME}"
+  DIST_DIR: ./dist
+
+commands:
+  # Build the CLI
+  build:
+    run: go build ${LDFLAGS} -o ${BINARY_NAME} .
+
+  # Run tests
+  test:
+    run: go test -v -race ./...
+
+  # Clean build artifacts
+  clean:
+    run: rm -f ${BINARY_NAME} && rm -rf ${DIST_DIR}
+
+  # Install locally
+  install:
+    run: sudo mv ${BINARY_NAME} /usr/local/bin/${BINARY_NAME}
+    depends: [build]
+
+  # Create a new release
+  release:
+    run: |
+      echo "Creating new release..."
+      read -p "Enter version (e.g. v1.0.0): " version
+      VERSION=$version git tag -a $version -m "Release $version"
+      git push origin $version
+      echo "Release $version created and pushed. GitHub Actions will build and publish the release."
+    depends: [build, test]
+
+  # Build for all platforms
+  dist:
+    run: |
+      mkdir -p ${DIST_DIR}
+      GOOS=linux GOARCH=amd64 go build ${LDFLAGS} -o ${DIST_DIR}/${BINARY_NAME}-linux-amd64 .
+      GOOS=darwin GOARCH=amd64 go build ${LDFLAGS} -o ${DIST_DIR}/${BINARY_NAME}-darwin-amd64 .
+      GOOS=darwin GOARCH=arm64 go build ${LDFLAGS} -o ${DIST_DIR}/${BINARY_NAME}-darwin-arm64 .
+      GOOS=windows GOARCH=amd64 go build ${LDFLAGS} -o ${DIST_DIR}/${BINARY_NAME}-windows-amd64.exe .
+      echo "Done! Binaries are available in the ${DIST_DIR} directory."
+    depends: [clean]
+
+  # Run linting
+  lint:
+    run: golangci-lint run
+
+  # Show version information
+  version:
+    run: |
+      if [ -z "$(git describe --tags --exact-match 2>/dev/null)" ]; then
+        echo "Development version ($(git rev-parse --short HEAD))"
+      else
+        echo "$(git describe --tags --exact-match)"
+      fi
