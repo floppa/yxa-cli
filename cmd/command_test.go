@@ -120,7 +120,10 @@ func TestCommandChaining(t *testing.T) {
 			// Restore stdout
 			w.Close()
 			os.Stdout = oldStdout
-			io.Copy(io.Discard, r)
+			_, err = io.Copy(io.Discard, r)
+			if err != nil {
+				t.Fatalf("Failed to discard output: %v", err)
+			}
 
 			// Read the log file to check execution order
 			logContent, err := os.ReadFile(logFile)

@@ -82,7 +82,12 @@ func TestLoadConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to get current directory: %v", err)
 	}
-	defer os.Chdir(currentDir)
+	defer func() {
+		err := os.Chdir(currentDir)
+		if err != nil {
+			t.Fatalf("Failed to change back to original directory: %v", err)
+		}
+	}()
 
 	// Change to the temporary directory
 	if err := os.Chdir(tempDir); err != nil {
