@@ -8,11 +8,11 @@ Yxa is the word for Axe is swedish. Lets chop some trees!
 
 ### From GitHub Releases (Recommended)
 
-Download the latest binary for your platform from the [GitHub Releases page](https://github.com/magnuseriksson/yxa-cli/releases).
+Download the latest binary for your platform from the [GitHub Releases page](https://github.com/floppa/yxa-cli/releases).
 
 ```bash
 # Linux/macOS (replace X.Y.Z with the version number and PLATFORM with your platform)
-curl -L https://github.com/magnuseriksson/yxa-cli/releases/download/vX.Y.Z/yxa-PLATFORM -o yxa
+curl -L https://github.com/floppa/yxa-cli/releases/download/vX.Y.Z/yxa-PLATFORM -o yxa
 chmod +x yxa
 sudo mv yxa /usr/local/bin/
 
@@ -23,13 +23,13 @@ sudo mv yxa /usr/local/bin/
 ### Using Go Install
 
 ```bash
-go install github.com/magnuseriksson/yxa-cli@latest
+go install github.com/floppa/yxa-cli@latest
 ```
 
 ### Build from Source
 
 ```bash
-git clone https://github.com/magnuseriksson/yxa-cli.git
+git clone https://github.com/floppa/yxa-cli.git
 cd yxa-cli
 go build -o yxa
 # Optional: move to a directory in your PATH
