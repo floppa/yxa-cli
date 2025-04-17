@@ -22,9 +22,15 @@ type ProjectConfig struct {
 
 // Command represents a command defined in the project.yml file
 type Command struct {
-	Run         string   `yaml:"run"`
-	Depends     []string `yaml:"depends,omitempty"`
-	Description string   `yaml:"description,omitempty"`
+	Run         string            `yaml:"run"`                    // Main command to execute
+	Commands    map[string]string `yaml:"commands,omitempty"`     // Multiple commands for parallel execution
+	Depends     []string          `yaml:"depends,omitempty"`      // Dependencies to execute first
+	Description string            `yaml:"description,omitempty"`  // Command description
+	Condition   string            `yaml:"condition,omitempty"`   // Condition to evaluate before running
+	Pre         string            `yaml:"pre,omitempty"`         // Command to run before the main command
+	Post        string            `yaml:"post,omitempty"`        // Command to run after the main command
+	Timeout     string            `yaml:"timeout,omitempty"`     // Timeout for command execution (e.g. "30s", "5m")
+	Parallel    bool              `yaml:"parallel,omitempty"`    // Whether to run commands in parallel
 }
 
 // LoadConfig loads the project configuration from the yxa.yml file
@@ -78,37 +84,75 @@ func LoadConfig() (*ProjectConfig, error) {
 
 // ReplaceVariables replaces variables in the given string with their values
 func (c *ProjectConfig) ReplaceVariables(input string) string {
-	// Regular expression to match ${VARIABLE} or $VARIABLE patterns
-	varPattern := regexp.MustCompile(`\$\{([^}]+)\}|\$([A-Za-z0-9_]+)`)
-	
-	// Replace all occurrences of variables
-	result := varPattern.ReplaceAllStringFunc(input, func(match string) string {
-		// Extract variable name
-		var varName string
-		if strings.HasPrefix(match, "${") && strings.HasSuffix(match, "}") {
-			varName = match[2 : len(match)-1]
-		} else {
-			varName = match[1:]
+	// Define regex pattern for variables: $VAR or ${VAR}
+	pattern := regexp.MustCompile(`\$(\w+|\{\w+\})`)
+
+	// Replace all occurrences
+	result := pattern.ReplaceAllStringFunc(input, func(match string) string {
+		// Extract variable name (remove $ and {} if present)
+		varName := match[1:] // Remove $
+		if strings.HasPrefix(varName, "{") && strings.HasSuffix(varName, "}") {
+			varName = varName[1 : len(varName)-1] // Remove { and }
 		}
-		
-		// Check if the variable is defined in the YAML variables
+
+		// Try to get value from different sources in order of priority
+		// 1. YAML variables
 		if value, ok := c.Variables[varName]; ok {
 			return value
 		}
-		
-		// Check if the variable is defined in the .env file
+
+		// 2. Environment variables from .env file
 		if value, ok := c.envVars[varName]; ok {
 			return value
 		}
-		
-		// Check if the variable is defined in the environment
+
+		// 3. System environment variables
 		if value, ok := os.LookupEnv(varName); ok {
 			return value
 		}
-		
-		// If the variable is not found, return the original match
+
+		// If variable not found, return the original match
 		return match
 	})
-	
+
 	return result
+}
+
+// EvaluateCondition evaluates a condition string and returns whether it's true
+func (c *ProjectConfig) EvaluateCondition(condition string) bool {
+	if condition == "" {
+		// Empty condition is always true
+		return true
+	}
+
+	// Replace variables in the condition
+	condition = c.ReplaceVariables(condition)
+
+	// Simple equality check (e.g., "$GOOS == darwin")
+	equalityPattern := regexp.MustCompile(`^\s*(.+?)\s*==\s*(.+?)\s*$`)
+	if matches := equalityPattern.FindStringSubmatch(condition); len(matches) == 3 {
+		return strings.TrimSpace(matches[1]) == strings.TrimSpace(matches[2])
+	}
+
+	// Simple inequality check (e.g., "$GOOS != darwin")
+	inequalityPattern := regexp.MustCompile(`^\s*(.+?)\s*!=\s*(.+?)\s*$`)
+	if matches := inequalityPattern.FindStringSubmatch(condition); len(matches) == 3 {
+		return strings.TrimSpace(matches[1]) != strings.TrimSpace(matches[2])
+	}
+
+	// Contains check (e.g., "$PATH contains /usr/local")
+	containsPattern := regexp.MustCompile(`^\s*(.+?)\s+contains\s+(.+?)\s*$`)
+	if matches := containsPattern.FindStringSubmatch(condition); len(matches) == 3 {
+		return strings.Contains(strings.TrimSpace(matches[1]), strings.TrimSpace(matches[2]))
+	}
+
+	// Exists check (e.g., "exists /path/to/file")
+	existsPattern := regexp.MustCompile(`^\s*exists\s+(.+?)\s*$`)
+	if matches := existsPattern.FindStringSubmatch(condition); len(matches) == 2 {
+		_, err := os.Stat(strings.TrimSpace(matches[1]))
+		return err == nil
+	}
+
+	// If we can't parse the condition, default to false
+	return false
 }

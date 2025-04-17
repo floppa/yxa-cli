@@ -88,6 +88,7 @@ func TestCommandChaining(t *testing.T) {
 		name           string
 		command        string
 		expectedOutput []string
+		expectError    bool
 	}{
 		{
 			name:           "Simple Chain",
@@ -102,7 +103,8 @@ func TestCommandChaining(t *testing.T) {
 		{
 			name:           "Circular Dependency",
 			command:        "circular",
-			expectedOutput: []string{"circular"},
+			expectedOutput: []string{},
+			expectError:    true,
 		},
 	}
 
@@ -123,8 +125,24 @@ func TestCommandChaining(t *testing.T) {
 
 			// Execute the command
 			err := executeCommand(tc.command)
-			if err != nil {
+			if err != nil && !tc.expectError {
 				t.Fatalf("Failed to execute command: %v", err)
+			} else if err == nil && tc.expectError {
+				t.Fatalf("Expected error for command %s but got none", tc.command)
+			}
+			
+			// If we expect an error, skip the rest of the test
+			if tc.expectError {
+				// Restore stdout
+				if err := w.Close(); err != nil {
+					t.Fatalf("Failed to close pipe writer: %v", err)
+				}
+				os.Stdout = oldStdout
+				_, err = io.Copy(io.Discard, r)
+				if err != nil {
+					t.Fatalf("Failed to discard output: %v", err)
+				}
+				return
 			}
 
 			// Restore stdout

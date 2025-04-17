@@ -110,7 +110,7 @@ commands:
       for pkg in $(go list ./...); do
         echo "Checking $pkg..."
         if ! go doc $pkg > /dev/null 2>&1; then
-          echo "⚠️ Missing documentation for package $pkg"
+          echo "😥 Missing documentation for package $pkg"
         else
           echo "✅ Documentation found for package $pkg"
         fi
@@ -122,16 +122,33 @@ commands:
     description: Check test coverage and report areas below threshold
     run: |
       echo "Checking test coverage..."
-      go test -cover ./... 2>/dev/null | grep -v "no test files" | grep -E "[0-9]\.[0-9]%" | while read line; do
-        pkg=$(echo "$line" | awk '{print $1}')
-        cov=$(echo "$line" | grep -o "[0-9]\+\.[0-9]\+%" | sed 's/%//')
+      # Create a temporary file for coverage output
+      COVERAGE_FILE=$(mktemp)
+      COVERAGE_PROFILE=$(mktemp)
+      
+      # Generate coverage profile
+      go test -coverprofile=$COVERAGE_PROFILE ./...
+      
+      # Get detailed coverage for each package
+      go tool cover -func=$COVERAGE_PROFILE > $COVERAGE_FILE
+      
+      # Process the coverage output - extract package names and coverage percentages
+      cat $COVERAGE_FILE | grep "total:" | while read -r line; do
+        # Get the package name (first field before the colon)
+        pkg=$(echo "$line" | cut -d: -f1 | xargs basename)
+        # Get the coverage percentage
+        cov=$(echo "$line" | grep -o "[0-9]\+\.[0-9]\+" | head -1)
+        
         # Check if coverage is below 80%
-        if [ ! -z "$cov" ] && (( $(echo "$cov < 80" | bc -l) )); then
-          echo "⚠️  Low coverage: $pkg $cov%"
-        elif [ ! -z "$cov" ]; then
+        if (( $(echo "$cov < 80" | bc -l) )); then
+          echo "😥 Low coverage: $pkg $cov%"
+        else
           echo "✅ Good coverage: $pkg $cov%"
         fi
       done
+      
+      # Clean up
+      rm -f $COVERAGE_FILE $COVERAGE_PROFILE
 
   # Check dependencies for vulnerabilities
   check-deps:
@@ -161,3 +178,41 @@ commands:
   check-all:
     description: Run all checks (tests, linting, security, docs, coverage, dependencies)
     depends: [test, lint, check-docs, check-coverage, check-deps, check-cross-platform]
+
+  # Example of conditional command execution
+  darwin-only:
+    description: Command that only runs on macOS
+    run: echo "This is running on macOS"
+    condition: "$GOOS == darwin"
+
+  # Example of command with hooks
+  build-with-hooks:
+    description: Build with pre and post hooks
+    pre: echo "Starting build process..."
+    run: go build -o yxa
+    post: echo "Build completed successfully!"
+    depends: [test]
+    
+  # Example of command with timeout
+  timeout-example:
+    description: Command that will timeout after 5 seconds
+    run: sleep 10
+    timeout: 5s
+    
+  # Example of parallel command execution
+  parallel-tasks:
+    description: Run multiple tasks in parallel
+    commands:
+      task1: echo "Task 1 running..." && sleep 2 && echo "Task 1 completed"
+      task2: echo "Task 2 running..." && sleep 1 && echo "Task 2 completed"
+      task3: echo "Task 3 running..." && sleep 3 && echo "Task 3 completed"
+    parallel: true
+    
+  # Example of sequential command execution with timeout
+  sequential-tasks:
+    description: Run multiple tasks sequentially with a timeout
+    commands:
+      step1: echo "Step 1" && sleep 1
+      step2: echo "Step 2" && sleep 1
+      step3: echo "Step 3" && sleep 1
+    timeout: 5s

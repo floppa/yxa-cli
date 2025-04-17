@@ -152,6 +152,108 @@ When you run `yxa install`, it will first run the `build` command, and then exec
 
 This allows you to create complex command chains and dependencies, similar to how Makefiles work, but with a cleaner, more modern syntax.
 
+### Conditional Command Execution
+
+Commands can be configured to run only when certain conditions are met. This is useful for platform-specific commands or commands that should only run in certain environments.
+
+```yaml
+commands:
+  # Only runs on macOS
+  macos-build:
+    run: go build -o bin/app-darwin
+    condition: "$GOOS == darwin"
+    
+  # Only runs if the .env file exists
+  load-env:
+    run: source .env
+    condition: "exists .env"
+    
+  # Only runs if PATH contains /usr/local/bin
+  check-path:
+    run: echo "Path contains /usr/local/bin"
+    condition: "$PATH contains /usr/local/bin"
+```
+
+Supported condition operators:
+- Equality: `==` (e.g., `$GOOS == darwin`)
+- Inequality: `!=` (e.g., `$GOOS != windows`)
+- Contains: `contains` (e.g., `$PATH contains /usr/local`)
+- Exists: `exists` (e.g., `exists /path/to/file`)
+
+### Command Hooks
+
+You can define pre and post hooks for commands. These are shell commands that run before and after the main command.
+
+```yaml
+commands:
+  build:
+    pre: echo "Starting build..."
+    run: go build -o bin/app
+    post: echo "Build complete"
+    
+  deploy:
+    pre: go test ./...
+    run: scp bin/app user@server:/path
+    post: echo "Deployed successfully"
+```
+
+Hooks are useful for:
+- Setup and cleanup operations
+- Validation before running a command
+- Notifications after command completion
+- Ensuring certain actions always happen around a command
+
+### Command Timeouts
+
+You can specify timeouts for commands to prevent them from running indefinitely. If a command exceeds its timeout, it will be terminated.
+
+```yaml
+commands:
+  long-process:
+    run: sleep 1000
+    timeout: 10s
+    
+  network-operation:
+    run: curl -s https://api.example.com
+    timeout: 30s
+```
+
+Timeout values use Go's duration format:
+- `s` for seconds (e.g., `30s`)
+- `m` for minutes (e.g., `5m`)
+- `h` for hours (e.g., `1h`)
+
+### Parallel Command Execution
+
+You can run multiple commands in parallel to speed up execution. This is useful for independent tasks that don't rely on each other's output.
+
+```yaml
+commands:
+  build-all:
+    description: Build all components in parallel
+    commands:
+      frontend: cd frontend && npm run build
+      backend: cd backend && go build
+      docs: cd docs && mkdocs build
+    parallel: true
+    
+  test-all:
+    description: Run tests for all components
+    commands:
+      unit: go test ./...
+      integration: go test -tags=integration ./...
+      e2e: cypress run
+    parallel: true
+    timeout: 5m
+```
+
+Features of parallel execution:
+- Each command's output is prefixed with its name for easy identification
+- All commands start simultaneously
+- The parent command completes when all parallel commands finish
+- If any parallel command fails, the parent command fails
+- You can combine with timeouts to limit the total execution time
+
 ## Configuration
 
 The `yxa.yml` file should be placed in the root directory of your project. It has the following structure:
@@ -191,6 +293,32 @@ commands:
 ```
 
 When you run `yxa release`, it will automatically execute the `build`, `test`, and `lint` commands first, and then run the `release` command.
+
+### Task Aggregator Commands
+
+You can create commands that serve purely as task aggregators by defining dependencies without specifying a `run` or `commands` property. These commands will simply execute all their dependencies in the correct order.
+
+```yaml
+commands:
+  lint:
+    run: golangci-lint run
+    description: Run linting checks
+    
+  test:
+    run: go test ./...
+    description: Run all tests
+    
+  check-coverage:
+    run: go test -coverprofile=coverage.out ./... && go tool cover -func=coverage.out
+    description: Check test coverage
+    
+  # This command only runs its dependencies
+  verify:
+    description: Run all verification steps
+    depends: [lint, test, check-coverage]
+```
+
+In this example, running `yxa verify` will execute the `lint`, `test`, and `check-coverage` commands in sequence, without running any additional command itself.
 
 ### Variables
 
