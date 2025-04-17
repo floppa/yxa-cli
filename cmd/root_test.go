@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/magnuseriksson/yxa-cli/config"
+	"github.com/floppa/yxa-cli/config"
 )
 
 
