@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/magnuseriksson/yxa-cli/config"
+	"github.com/floppa/yxa-cli/config"
 )
 
 // TestCommandExecution tests that the CLI can execute various bash commands

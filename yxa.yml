@@ -100,3 +100,64 @@ commands:
       else
         echo "$(git describe --tags --exact-match)"
       fi
+
+  # Check documentation completeness
+  check-docs:
+    description: Check documentation completeness
+    run: |
+      echo "Checking package documentation..."
+      # Check if each package has documentation
+      for pkg in $(go list ./...); do
+        echo "Checking $pkg..."
+        if ! go doc $pkg > /dev/null 2>&1; then
+          echo "⚠️ Missing documentation for package $pkg"
+        else
+          echo "✅ Documentation found for package $pkg"
+        fi
+      done
+      echo "Documentation check completed"
+
+  # Check test coverage
+  check-coverage:
+    description: Check test coverage and report areas below threshold
+    run: |
+      echo "Checking test coverage..."
+      go test -cover ./... 2>/dev/null | grep -v "no test files" | grep -E "[0-9]\.[0-9]%" | while read line; do
+        pkg=$(echo "$line" | awk '{print $1}')
+        cov=$(echo "$line" | grep -o "[0-9]\+\.[0-9]\+%" | sed 's/%//')
+        # Check if coverage is below 80%
+        if [ ! -z "$cov" ] && (( $(echo "$cov < 80" | bc -l) )); then
+          echo "⚠️  Low coverage: $pkg $cov%"
+        elif [ ! -z "$cov" ]; then
+          echo "✅ Good coverage: $pkg $cov%"
+        fi
+      done
+
+  # Check dependencies for vulnerabilities
+  check-deps:
+    description: Check dependencies for known vulnerabilities
+    run: |
+      echo "Checking dependencies for vulnerabilities..."
+      govulncheck ./...
+
+  # Check for outdated dependencies
+  check-outdated:
+    description: Check for outdated dependencies
+    run: |
+      echo "Checking for outdated dependencies..."
+      go list -m -u all | grep -v "(latest)" || echo "All dependencies are up to date"
+
+  # Cross-platform build check
+  check-cross-platform:
+    description: Verify cross-platform builds
+    run: |
+      echo "Verifying cross-platform builds..."
+      GOOS=linux GOARCH=amd64 go build -o /dev/null && echo "✅ Linux/amd64 build successful"
+      GOOS=darwin GOARCH=amd64 go build -o /dev/null && echo "✅ macOS/amd64 build successful"
+      GOOS=darwin GOARCH=arm64 go build -o /dev/null && echo "✅ macOS/arm64 build successful"
+      GOOS=windows GOARCH=amd64 go build -o /dev/null && echo "✅ Windows/amd64 build successful"
+
+  # Run all checks
+  check-all:
+    description: Run all checks (tests, linting, security, docs, coverage, dependencies)
+    depends: [test, lint, check-docs, check-coverage, check-deps, check-cross-platform]

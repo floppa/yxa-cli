@@ -6,7 +6,7 @@ import (
 	"os/exec"
 	"strings"
 
-	"github.com/magnuseriksson/yxa-cli/config"
+	"github.com/floppa/yxa-cli/config"
 	"github.com/spf13/cobra"
 )
 

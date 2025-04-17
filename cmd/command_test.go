@@ -6,7 +6,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/magnuseriksson/yxa-cli/config"
+	"github.com/floppa/yxa-cli/config"
 )
 
 // TestCommandChaining tests the command chaining functionality

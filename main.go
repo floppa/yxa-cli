@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/magnuseriksson/yxa-cli/cmd"
+	"github.com/floppa/yxa-cli/cmd"
 )
 
 // Version information - these will be set during build by the Makefile

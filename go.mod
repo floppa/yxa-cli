@@ -1,4 +1,4 @@
-module github.com/magnuseriksson/yxa-cli
+module github.com/floppa/yxa-cli
 
 go 1.24
 

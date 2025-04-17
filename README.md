@@ -43,7 +43,7 @@ sudo mv yxa /usr/local/bin/
 1. Create a `yxa.yml` file in your project directory with the following structure:
 
 ```yaml
-name: my-project
+name: yxa-cli
 
 variables:
   PROJECT_DIR: .
@@ -51,10 +51,13 @@ variables:
 
 commands:
   build:
+    desciption: "Build yxa-cli"
     run: go build -o $BUILD_DIR/app $PROJECT_DIR/...
   test:
+    description: "Run tests"
     run: go test -v ./...
   api:
+    description: "Call some random api"
     run: curl -H "Authorization: Bearer $API_KEY" $API_URL
   # Add more commands as needed
 ```
@@ -71,6 +74,8 @@ yxa test
 ```
 
 ## Development
+
+yxa-cli uses it self for its tasks (go figure). The recommended path is to download and install yxa first.
 
 ### Releasing New Versions
 
