@@ -85,4 +85,4 @@ jobs:
         env:
           GOOS: ${{ matrix.goos }}
           GOARCH: ${{ matrix.goarch }}
-        run: go build -v .
+        run: go build -buildvcs=false -v .
