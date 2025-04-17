@@ -8,6 +8,8 @@ variables:
   LDFLAGS: -ldflags "-s -w -X main.version=${VERSION} -X main.buildTime=${BUILD_TIME}"
   DIST_DIR: ./dist
 
+
+
 commands:
   # Build the CLI
   build:
@@ -30,7 +32,38 @@ commands:
   release:
     run: |
       echo "Creating new release..."
-      read -p "Enter version (e.g. v1.0.0): " version
+      # Get the current tag
+      current_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "none")
+      
+      # Calculate next version if current tag exists and follows semver
+      if [[ $current_tag == v* ]] && [[ $current_tag =~ v([0-9]+)\.([0-9]+)\.([0-9]+) ]]; then
+        major=${BASH_REMATCH[1]}
+        minor=${BASH_REMATCH[2]}
+        patch=${BASH_REMATCH[3]}
+        
+        # Increment minor version
+        next_minor=$((minor + 1))
+        suggested_version="v$major.$next_minor.0"
+        
+        echo "Current version: $current_tag"
+        echo "Suggested next version: $suggested_version"
+        read -p "Enter version [$suggested_version]: " version
+        version=${version:-$suggested_version}
+      else
+        echo "No previous version tag found or tag doesn't follow semver format."
+        read -p "Enter version (e.g. v1.0.0): " version
+      fi
+      
+      # Validate version format
+      if [[ ! $version =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+        echo "Warning: Version '$version' doesn't follow the recommended format (vX.Y.Z)"
+        read -p "Continue anyway? (y/n): " confirm
+        if [[ $confirm != "y" && $confirm != "Y" ]]; then
+          echo "Release cancelled."
+          exit 1
+        fi
+      fi
+      
       VERSION=$version git tag -a $version -m "Release $version"
       git push origin $version
       echo "Release $version created and pushed. GitHub Actions will build and publish the release."

@@ -2,24 +2,38 @@
 
 Yxa is a simple CLI tool that loads a config file (yxa.yml) in the current directory and registers commands defined in it.
 
-Yxa is the word for Axe is swedish. Lets chop some trees.
-
-## Overview
-
-`yxa` is a command-line tool that allows you to define project-specific commands in a YAML configuration file (yxa.yml). It dynamically registers these commands and executes them using the shell.
+Yxa is the word for Axe is swedish. Lets chop some trees!
 
 ## Installation
+
+### From GitHub Releases (Recommended)
+
+Download the latest binary for your platform from the [GitHub Releases page](https://github.com/magnuseriksson/yxa-cli/releases).
+
+```bash
+# Linux/macOS (replace X.Y.Z with the version number and PLATFORM with your platform)
+curl -L https://github.com/magnuseriksson/yxa-cli/releases/download/vX.Y.Z/yxa-PLATFORM -o yxa
+chmod +x yxa
+sudo mv yxa /usr/local/bin/
+
+# Windows
+# Download the .exe file and add it to your PATH
+```
+
+### Using Go Install
 
 ```bash
 go install github.com/magnuseriksson/yxa-cli@latest
 ```
 
-Or build from source:
+### Build from Source
 
 ```bash
 git clone https://github.com/magnuseriksson/yxa-cli.git
 cd yxa-cli
 go build -o yxa
+# Optional: move to a directory in your PATH
+sudo mv yxa /usr/local/bin/
 ```
 
 ## Usage
@@ -55,6 +69,29 @@ yxa
 yxa build
 yxa test
 ```
+
+## Development
+
+### Releasing New Versions
+
+The project includes a built-in release command that helps with creating new releases:
+
+```bash
+# Run the release command
+yxa release
+```
+
+This command will:
+1. Show the current version tag
+2. Suggest the next minor version (e.g., if current is v1.2.0, it will suggest v1.3.0)
+3. Create a git tag with the specified version
+4. Push the tag to GitHub
+
+Once the tag is pushed, GitHub Actions will automatically:
+- Run tests
+- Build binaries for multiple platforms (Linux, macOS, Windows)
+- Create a GitHub release with the binaries attached
+- Generate a changelog based on commits since the last release
 
 ### Development Tasks
 
@@ -121,9 +158,31 @@ The `yxa.yml` file should be placed in the root directory of your project. It ha
     - `run`: The shell command to execute
     - `depends` (optional): A list of command names that should be executed before this command
 
-### Variables
+### Command Chaining
 
-You can define variables in the `yxa.yml` file and use them in your commands. Variables can be referenced using `$VAR_NAME` or `${VAR_NAME}` syntax.
+One of the powerful features of `yxa-cli` is command chaining, which allows you to define dependencies between commands. When you run a command, all its dependencies will be executed first, in the correct order.
+
+For example:
+
+```yaml
+commands:
+  build:
+    run: go build -o myapp .
+  
+  test:
+    run: go test ./...
+  
+  lint:
+    run: golangci-lint run
+  
+  release:
+    run: ./scripts/release.sh
+    depends: [build, test, lint]  # These commands will run before release
+```
+
+When you run `yxa release`, it will automatically execute the `build`, `test`, and `lint` commands first, and then run the `release` command.
+
+### Variables
 
 The CLI supports three types of variables:
 
