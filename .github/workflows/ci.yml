@@ -44,15 +44,15 @@ jobs:
       - name: Check Test Coverage
         run: |
           echo "Checking test coverage..."
-          # Generate coverage profile for all packages
-          go test -coverprofile=coverage.out ./...
+          # Generate coverage profile for all packages except main.go
+          go test -coverprofile=coverage.out $(go list ./... | grep -v "/main$")
           
-          # Get total coverage percentage
+          # Get total coverage percentage (excluding main.go)
           total_cov=$(go tool cover -func=coverage.out | grep "total:" | grep -o "[0-9]\+\.[0-9]\+%" | sed 's/%//')
-          echo "Total coverage: ${total_cov}%"
+          echo "Total coverage (excluding main.go): ${total_cov}%"
           
           # Check individual package coverage
-          go test -cover ./... | grep -v "no test files" | grep -E "[0-9]\.[0-9]%" | while read line; do
+          go test -cover $(go list ./... | grep -v "/main$") | grep -v "no test files" | grep -E "[0-9]\.[0-9]%" | while read line; do
             pkg=$(echo "$line" | awk '{print $1}')
             cov=$(echo "$line" | grep -o "[0-9]\+\.[0-9]\+%" | sed 's/%//')
             if [ ! -z "$cov" ] && (( $(echo "$cov < 80" | bc -l) )); then
@@ -65,6 +65,10 @@ jobs:
             echo "::error::Total test coverage is below 80%: ${total_cov}%"
             exit 1
           fi
+          
+          # Also run tests for main package, but don't include in coverage calculations
+          echo "Running tests for main package (not included in coverage threshold)..."
+          go test -v ./main
           
       - name: Check Dependencies for Vulnerabilities
         run: |

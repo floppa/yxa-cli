@@ -122,33 +122,27 @@ commands:
     description: Check test coverage and report areas below threshold
     run: |
       echo "Checking test coverage..."
-      # Create a temporary file for coverage output
-      COVERAGE_FILE=$(mktemp)
-      COVERAGE_PROFILE=$(mktemp)
+      # Generate coverage profile for all packages
+      go test -coverprofile=coverage.out ./...
       
-      # Generate coverage profile
-      go test -coverprofile=$COVERAGE_PROFILE ./...
+      # Get total coverage percentage
+      total_cov=$(go tool cover -func=coverage.out | grep "total:" | grep -o "[0-9]\+\.[0-9]\+%" | sed 's/%//')
+      echo "Total coverage: ${total_cov}%"
       
-      # Get detailed coverage for each package
-      go tool cover -func=$COVERAGE_PROFILE > $COVERAGE_FILE
-      
-      # Process the coverage output - extract package names and coverage percentages
-      cat $COVERAGE_FILE | grep "total:" | while read -r line; do
-        # Get the package name (first field before the colon)
-        pkg=$(echo "$line" | cut -d: -f1 | xargs basename)
-        # Get the coverage percentage
-        cov=$(echo "$line" | grep -o "[0-9]\+\.[0-9]\+" | head -1)
-        
-        # Check if coverage is below 80%
-        if (( $(echo "$cov < 80" | bc -l) )); then
-          echo "😥 Low coverage: $pkg $cov%"
-        else
-          echo "✅ Good coverage: $pkg $cov%"
+      # Check individual package coverage
+      go test -cover ./... | grep -v "no test files" | grep -E "[0-9]\.[0-9]%" | while read line; do
+        pkg=$(echo "$line" | awk '{print $1}')
+        cov=$(echo "$line" | grep -o "[0-9]\+\.[0-9]\+%" | sed 's/%//')
+        if [ ! -z "$cov" ] && (( $(echo "$cov < 80" | bc -l) )); then
+          echo "::warning::Low test coverage for $pkg: $cov%"
         fi
       done
       
-      # Clean up
-      rm -f $COVERAGE_FILE $COVERAGE_PROFILE
+      # Fail if total coverage is below threshold
+      if (( $(echo "$total_cov < 80" | bc -l) )); then
+        echo "::error::Total test coverage is below 80%: ${total_cov}%"
+        exit 1
+      fi
 
   # Check dependencies for vulnerabilities
   check-deps:
