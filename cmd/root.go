@@ -1,6 +1,7 @@
 package cmd
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"io"
@@ -27,6 +28,9 @@ var rootCmd = &cobra.Command{
 
 // Execute executes the root command
 func Execute() {
+	// Setup command completion
+	setupCompletion()
+	
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
 		os.Exit(1)
@@ -37,6 +41,7 @@ func Execute() {
 var (
 	cfg              *config.ProjectConfig
 	executedCommands = make(map[string]bool)
+	cmdExecutor      CommandExecutor = NewDefaultExecutor()
 )
 
 // executeCommand runs a command with its dependencies
@@ -154,43 +159,8 @@ func executeCommand(cmdName string) error {
 
 // executeSingleCommand executes a single command with an optional timeout
 func executeSingleCommand(cmdStr string, timeout time.Duration) error {
-	// Create a command
-	cmdExec := exec.Command("sh", "-c", cmdStr) // #nosec G204
-	cmdExec.Stdout = os.Stdout
-	cmdExec.Stderr = os.Stderr
-
-	// If no timeout is specified, just run the command
-	if timeout == 0 {
-		return cmdExec.Run()
-	}
-
-	// Create a context with timeout
-	ctx, cancel := context.WithTimeout(context.Background(), timeout)
-	defer cancel()
-
-	// Set the context on the command
-	err := cmdExec.Start()
-	if err != nil {
-		return err
-	}
-
-	// Create a channel for the command completion
-	done := make(chan error, 1)
-	go func() {
-		done <- cmdExec.Wait()
-	}()
-
-	// Wait for either command completion or timeout
-	select {
-	case err := <-done:
-		return err
-	case <-ctx.Done():
-		// Command timed out, kill it
-		if err := cmdExec.Process.Kill(); err != nil {
-			return fmt.Errorf("command timed out after %s and failed to kill process: %v", timeout, err)
-		}
-		return fmt.Errorf("command timed out after %s", timeout)
-	}
+	// Use the command executor to run the command
+	return cmdExecutor.Execute(cmdStr, timeout)
 }
 
 // executeParallelCommands executes multiple commands in parallel
@@ -221,41 +191,47 @@ func executeParallelCommands(cmdName string, cmd config.Command, timeout time.Du
 			cmdStr = cfg.ReplaceVariables(cmdStr)
 			fmt.Printf("Executing parallel sub-command '%s' for '%s'...\n", name, cmdName)
 
-			// Create and start the command
-			cmdExec := exec.Command("sh", "-c", cmdStr) // #nosec G204
+			// Create safe writers for stdout and stderr
+			prefixedStdout := newSafeWriter(cmdExecutor.GetStdout(), fmt.Sprintf("[%s] ", name))
+			prefixedStderr := newSafeWriter(cmdExecutor.GetStderr(), fmt.Sprintf("[%s] ", name))
 			
-			// Create prefixed writers for stdout and stderr
-			prefixedStdout := newPrefixedWriter(os.Stdout, fmt.Sprintf("[%s] ", name))
-			prefixedStderr := newPrefixedWriter(os.Stderr, fmt.Sprintf("[%s] ", name))
-			cmdExec.Stdout = prefixedStdout
-			cmdExec.Stderr = prefixedStderr
-
-			// Start the command
-			err := cmdExec.Start()
-			if err != nil {
-				errChan <- fmt.Errorf("failed to start sub-command '%s' for '%s': %v", name, cmdName, err)
-				return
+			// Create a local executor with prefixed output
+			localExecutor := &DefaultExecutor{
+				Stdout: prefixedStdout,
+				Stderr: prefixedStderr,
 			}
 
 			// Create a channel for command completion
 			done := make(chan error, 1)
 			go func() {
-				done <- cmdExec.Wait()
+				done <- localExecutor.Execute(cmdStr, 0) // No timeout here, we'll handle it with context
 			}()
 
 			// Wait for command completion or timeout
 			select {
 			case err := <-done:
+				// Flush the buffers after command completion
+				if err := prefixedStdout.Flush(); err != nil {
+					fmt.Fprintf(os.Stderr, "Error flushing stdout buffer: %v\n", err)
+				}
+				if err := prefixedStderr.Flush(); err != nil {
+					fmt.Fprintf(os.Stderr, "Error flushing stderr buffer: %v\n", err)
+				}
+				
 				if err != nil {
 					errChan <- fmt.Errorf("sub-command '%s' for '%s' failed: %v", name, cmdName, err)
 				}
 			case <-ctx.Done():
-				// Command timed out or context was canceled
-				if err := cmdExec.Process.Kill(); err != nil {
-					errChan <- fmt.Errorf("sub-command '%s' for '%s' timed out after %s and failed to kill process: %v", name, cmdName, timeout, err)
-				} else {
-					errChan <- fmt.Errorf("sub-command '%s' for '%s' timed out after %s", name, cmdName, timeout)
+				// Flush the buffers before reporting timeout
+				if err := prefixedStdout.Flush(); err != nil {
+					fmt.Fprintf(os.Stderr, "Error flushing stdout buffer: %v\n", err)
 				}
+				if err := prefixedStderr.Flush(); err != nil {
+					fmt.Fprintf(os.Stderr, "Error flushing stderr buffer: %v\n", err)
+				}
+				
+				// Command timed out or context was canceled
+				errChan <- fmt.Errorf("sub-command '%s' for '%s' timed out after %s", name, cmdName, timeout)
 			}
 		}(name, cmdStr)
 	}
@@ -288,7 +264,7 @@ func executeSequentialCommands(cmdName string, cmd config.Command, timeout time.
 		fmt.Printf("Executing sequential sub-command '%s' for '%s'...\n", name, cmdName)
 
 		// Execute the command with timeout
-		err := executeSingleCommand(cmdStr, timeout)
+		err := cmdExecutor.Execute(cmdStr, timeout)
 		if err != nil {
 			return fmt.Errorf("sub-command '%s' for '%s' failed: %v", name, cmdName, err)
 		}
@@ -297,36 +273,102 @@ func executeSequentialCommands(cmdName string, cmd config.Command, timeout time.
 	return nil
 }
 
-// newPrefixedWriter creates a writer that prefixes each line with the given prefix
-type prefixedWriter struct {
+// Global mutexes for synchronizing output to writers
+var (
+	writerMutexes = make(map[io.Writer]*sync.Mutex)
+	writerMutexLock sync.Mutex
+)
+
+// safeWriter is a thread-safe writer implementation
+type safeWriter struct {
 	writer io.Writer
 	prefix string
-	buffer []byte
+	buffer bytes.Buffer
+	mutex  sync.Mutex
 }
 
-func newPrefixedWriter(writer io.Writer, prefix string) *prefixedWriter {
-	return &prefixedWriter{
+func newSafeWriter(writer io.Writer, prefix string) *safeWriter {
+	return &safeWriter{
 		writer: writer,
 		prefix: prefix,
-		buffer: make([]byte, 0, 1024),
 	}
 }
 
-func (w *prefixedWriter) Write(p []byte) (n int, err error) {
+// Write appends data to the buffer in a thread-safe manner
+func (w *safeWriter) Write(p []byte) (n int, err error) {
+	// Lock the mutex for the entire operation
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+	
+	// Record the length of the input
 	n = len(p)
+	
+	// Process each byte
 	for _, b := range p {
 		if b == '\n' {
-			// Write the prefix and the buffered content
-			_, err = fmt.Fprintf(w.writer, "%s%s\n", w.prefix, w.buffer)
-			if err != nil {
-				return
-			}
-			w.buffer = w.buffer[:0]
+			// For newlines, add the newline to the buffer
+			w.buffer.WriteByte('\n')
 		} else {
-			w.buffer = append(w.buffer, b)
+			// Add the byte to the buffer
+			w.buffer.WriteByte(b)
 		}
 	}
+	
 	return
+}
+
+// getWriterMutex returns a mutex for the given writer
+func getWriterMutex(writer io.Writer) *sync.Mutex {
+	writerMutexLock.Lock()
+	defer writerMutexLock.Unlock()
+	
+	mutex, ok := writerMutexes[writer]
+	if !ok {
+		mutex = &sync.Mutex{}
+		writerMutexes[writer] = mutex
+	}
+	
+	return mutex
+}
+
+// Flush writes the buffered data to the underlying writer with the prefix
+func (w *safeWriter) Flush() error {
+	// Lock the mutex for the entire operation
+	w.mutex.Lock()
+	defer w.mutex.Unlock()
+	
+	// Get the buffer content
+	bufferContent := w.buffer.String()
+	
+	// Reset the buffer
+	w.buffer.Reset()
+	
+	// If there's nothing to write, return
+	if len(bufferContent) == 0 {
+		return nil
+	}
+	
+	// Split the content by newlines
+	lines := strings.Split(bufferContent, "\n")
+	
+	// Get the mutex for the underlying writer
+	writerMutex := getWriterMutex(w.writer)
+	
+	// Lock the writer mutex
+	writerMutex.Lock()
+	defer writerMutex.Unlock()
+	
+	// Write each line with the prefix
+	for _, line := range lines {
+		if line != "" {
+			_, err := fmt.Fprintf(w.writer, "%s%s\n", w.prefix, line)
+			if err != nil {
+				return err
+			}
+		}
+	}
+	
+	return nil
 }
 
 // init function is called when the package is initialized
@@ -335,21 +377,21 @@ func init() {
 	var err error
 	cfg, err = config.LoadConfig()
 	if err != nil {
-		fmt.Fprintf(os.Stderr, "Warning: %v\n", err)
+		fmt.Println("Warning: yxa.yml not found in the current directory")
+		cfg = &config.ProjectConfig{}
 	}
 
 	// Register commands from config
-	if cfg != nil {
-		registerCommands()
-	}
+	registerCommands()
+}
 
-	// Add custom completion function
+// Add custom completion function
+func setupCompletion() {
 	rootCmd.ValidArgsFunction = func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 		var completions []string
 		if cfg == nil {
 			return completions, cobra.ShellCompDirectiveNoFileComp
 		}
-
 		// Add all commands from config
 		for cmdName := range cfg.Commands {
 			if strings.HasPrefix(cmdName, toComplete) {

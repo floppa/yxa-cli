@@ -19,6 +19,8 @@ var (
 	osExit   = os.Exit
 	osArgs   = os.Args
 	stdout   = os.Stdout
+	cmdExecute = cmd.Execute
+	run       = runImpl
 )
 
 // main is the entry point for the application
@@ -28,9 +30,9 @@ func main() {
 	osExit(code)
 }
 
-// run executes the application logic and returns an exit code
+// runImpl executes the application logic and returns an exit code
 // This function is separate from main to make it testable
-func run(args []string, out io.Writer) int {
+func runImpl(args []string, out io.Writer) int {
 	// Check if version flag is provided
 	if len(args) > 1 && (args[1] == "-v" || args[1] == "--version") {
 		_, err := fmt.Fprintf(out, "yxa version %s (built at %s)\n", version, buildTime)
@@ -42,6 +44,6 @@ func run(args []string, out io.Writer) int {
 	}
 
 	// Execute the CLI
-	cmd.Execute()
+	cmdExecute()
 	return 0
 }

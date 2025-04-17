@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -40,8 +41,8 @@ func TestExecuteSingleCommand(t *testing.T) {
 		},
 		{
 			name:          "Command with timeout",
-			command:       "sleep 2",
-			timeout:       500 * time.Millisecond,
+			command:       "sleep 0.1",
+			timeout:       5 * time.Millisecond,
 			expectError:   true,
 			expectTimeout: true,
 		},
@@ -88,66 +89,90 @@ func TestExecuteSingleCommand(t *testing.T) {
 
 // TestExecuteSequentialCommands tests the executeSequentialCommands function
 func TestExecuteSequentialCommands(t *testing.T) {
+	// Set up test environment with mock executor
+	cleanup := setupTestEnvironment(t)
+	defer cleanup()
+
+	// Get the mock executor
+	mockExec := cmdExecutor.(*MockExecutor)
+
+	// Clear the output buffer
+	mockExec.ClearOutput()
+
 	// Create a test command
 	cmd := config.Command{
 		Commands: map[string]string{
-			"step1": "echo 'Step 1'",
-			"step2": "echo 'Step 2'",
-			"step3": "echo 'Step 3'",
+			"step1": "echo Step 1",
+			"step2": "echo Step 2",
+			"step3": "echo Step 3",
 		},
 	}
 
-	// Set up global config for variable replacement
-	cfg = &config.ProjectConfig{
-		Variables: map[string]string{},
-	}
-
-	// Capture stdout and stderr
-	oldStdout := os.Stdout
-	oldStderr := os.Stderr
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-	os.Stderr = w
+	// Set up specific command results for the mock executor
+	mockExec.AddCommandResult("echo Step 1", "Step 1\n", nil)
+	mockExec.AddCommandResult("echo Step 2", "Step 2\n", nil)
+	mockExec.AddCommandResult("echo Step 3", "Step 3\n", nil)
 
 	// Execute the sequential commands
 	err := executeSequentialCommands("test-sequential", cmd, 0)
-
-	// Close the pipe writer and restore stdout/stderr
-	if err := w.Close(); err != nil {
-		t.Errorf("Failed to close writer: %v", err)
-	}
-	os.Stdout = oldStdout
-	os.Stderr = oldStderr
-
-	// Read the output
-	var buf bytes.Buffer
-	if _, err := io.Copy(&buf, r); err != nil {
-		t.Errorf("Failed to read output: %v", err)
-	}
-	output := buf.String()
 
 	// Check the result
 	if err != nil {
 		t.Errorf("Expected no error but got: %v", err)
 	}
-	if !strings.Contains(output, "Step 1") || !strings.Contains(output, "Step 2") || !strings.Contains(output, "Step 3") {
-		t.Errorf("Output does not contain all steps: %s", output)
+
+	// Get the output from the mock executor
+	output := mockExec.GetOutput()
+
+	// Check that each step was executed
+	expectedSteps := []string{"Step 1", "Step 2", "Step 3"}
+	for _, step := range expectedSteps {
+		if !strings.Contains(output, step) {
+			t.Errorf("Output does not contain step '%s': %s", step, output)
+		}
+	}
+
+	// Check that all commands were executed (we don't check the exact order because
+	// map iteration order in Go is not guaranteed, which affects how commands are executed)
+	expectedCmds := []string{"echo Step 1", "echo Step 2", "echo Step 3"}
+	for _, expectedCmd := range expectedCmds {
+		found := false
+		for _, executedCmd := range mockExec.ExecutedCommands {
+			if strings.Contains(executedCmd, expectedCmd) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("Expected command '%s' to be executed, but it wasn't", expectedCmd)
+		}
+	}
+	
+	// Check that exactly 3 commands were executed
+	if len(mockExec.ExecutedCommands) != 3 {
+		t.Errorf("Expected 3 commands to be executed, got %d", len(mockExec.ExecutedCommands))
 	}
 }
 
-// TestPrefixedWriter tests the prefixedWriter implementation
-func TestPrefixedWriter(t *testing.T) {
-	// Create a buffer to capture output
+// TestSafeWriter tests the safeWriter implementation
+func TestSafeWriter(t *testing.T) {
+	// Create a buffer to write to
 	var buf bytes.Buffer
 
-	// Create a prefixed writer
+	// Create a safe writer
 	prefix := "[TEST] "
-	writer := newPrefixedWriter(&buf, prefix)
+	writer := newSafeWriter(&buf, prefix)
 
 	// Test writing a single line
 	if _, err := writer.Write([]byte("Hello, World!\n")); err != nil {
 		t.Errorf("Failed to write to buffer: %v", err)
 	}
+	
+	// Flush the buffer
+	if err := writer.Flush(); err != nil {
+		t.Errorf("Failed to flush buffer: %v", err)
+	}
+	
 	expected := prefix + "Hello, World!\n"
 	if buf.String() != expected {
 		t.Errorf("Expected %q, got %q", expected, buf.String())
@@ -156,23 +181,38 @@ func TestPrefixedWriter(t *testing.T) {
 	// Reset the buffer
 	buf.Reset()
 
-	// Test writing multiple lines
-	if _, err := writer.Write([]byte("Line 1\nLine 2\nLine 3")); err != nil {
+	// Test partial line followed by complete line
+	if _, err := writer.Write([]byte("Partial")); err != nil {
 		t.Errorf("Failed to write to buffer: %v", err)
 	}
-	expected = prefix + "Line 1\n" + prefix + "Line 2\n"
-	if !strings.HasPrefix(buf.String(), expected) {
-		t.Errorf("Expected output to start with %q, got %q", expected, buf.String())
+	if _, err := writer.Write([]byte(" Line\nComplete Line\n")); err != nil {
+		t.Errorf("Failed to write to buffer: %v", err)
 	}
-	// The last line without a newline should be buffered
-	if strings.Contains(buf.String(), "Line 3") {
-		t.Errorf("Line without newline should be buffered, but found in output: %q", buf.String())
+	
+	// Flush the buffer
+	if err := writer.Flush(); err != nil {
+		t.Errorf("Failed to flush buffer: %v", err)
+	}
+	
+	expected = prefix + "Partial Line\n" + prefix + "Complete Line\n"
+	if buf.String() != expected {
+		t.Errorf("Expected %q, got %q", expected, buf.String())
 	}
 
-	// Write a newline to flush the buffer
-	if _, err := writer.Write([]byte("\n")); err != nil {
+	// Reset the buffer
+	buf.Reset()
+
+	// Test writing multiple lines
+	if _, err := writer.Write([]byte("Line 1\nLine 2\nLine 3\n")); err != nil {
 		t.Errorf("Failed to write to buffer: %v", err)
 	}
+	
+	// Flush the buffer
+	if err := writer.Flush(); err != nil {
+		t.Errorf("Failed to flush buffer: %v", err)
+	}
+	
+
 	expected = prefix + "Line 1\n" + prefix + "Line 2\n" + prefix + "Line 3\n"
 	if buf.String() != expected {
 		t.Errorf("Expected %q, got %q", expected, buf.String())
@@ -181,85 +221,84 @@ func TestPrefixedWriter(t *testing.T) {
 
 // TestExecuteParallelCommands tests the executeParallelCommands function
 func TestExecuteParallelCommands(t *testing.T) {
-	// Skip if running in CI environment
+	// Skip in CI environment
 	if os.Getenv("CI") != "" {
 		t.Skip("Skipping parallel command test in CI environment")
 	}
 
-	// Create a test command
+	// Set up test environment with mock executor
+	cleanup := setupTestEnvironment(t)
+	defer cleanup()
+
+	// Get the mock executor
+	mockExec := cmdExecutor.(*MockExecutor)
+
+	// Clear the output buffer
+	mockExec.ClearOutput()
+
+	// Create a test command with shorter sleep times to speed up tests
 	cmd := config.Command{
 		Commands: map[string]string{
-			"task1": "echo 'Task 1' && sleep 0.1",
-			"task2": "echo 'Task 2' && sleep 0.1",
-			"task3": "echo 'Task 3' && sleep 0.1",
+			"task1": "echo Task 1",
+			"task2": "echo Task 2",
+			"task3": "echo Task 3",
 		},
 		Parallel: true,
 	}
 
-	// Set up global config for variable replacement
-	cfg = &config.ProjectConfig{
-		Variables: map[string]string{},
-	}
-
-	// Capture stdout and stderr
-	oldStdout := os.Stdout
-	oldStderr := os.Stderr
-	r, w, _ := os.Pipe()
-	os.Stdout = w
-	os.Stderr = w
+	// Set up specific command results for the mock executor
+	mockExec.AddCommandResult("echo Task 1", "Task 1\n", nil)
+	mockExec.AddCommandResult("echo Task 2", "Task 2\n", nil)
+	mockExec.AddCommandResult("echo Task 3", "Task 3\n", nil)
 
 	// Execute the parallel commands
 	err := executeParallelCommands("test-parallel", cmd, 0)
-
-	// Close the pipe writer and restore stdout/stderr
-	if err := w.Close(); err != nil {
-		t.Errorf("Failed to close writer: %v", err)
-	}
-	os.Stdout = oldStdout
-	os.Stderr = oldStderr
-
-	// Read the output
-	var buf bytes.Buffer
-	if _, err := io.Copy(&buf, r); err != nil {
-		t.Errorf("Failed to read output: %v", err)
-	}
-	output := buf.String()
 
 	// Check the result
 	if err != nil {
 		t.Errorf("Expected no error but got: %v", err)
 	}
-	if !strings.Contains(output, "Task 1") || !strings.Contains(output, "Task 2") || !strings.Contains(output, "Task 3") {
-		t.Errorf("Output does not contain all tasks: %s", output)
+
+	// Get the output from the mock executor
+	output := mockExec.GetOutput()
+
+	// Check that all tasks were executed
+	expectedTasks := []string{"Task 1", "Task 2", "Task 3"}
+	for _, task := range expectedTasks {
+		if !strings.Contains(output, task) {
+			t.Errorf("Output does not contain task '%s': %s", task, output)
+		}
 	}
 
-	// Test with a timeout
-	cmd.Commands["slow"] = "sleep 2"
-	
-	// Capture stdout and stderr again
-	r, w, _ = os.Pipe()
-	os.Stdout = w
-	os.Stderr = w
-
-	// Execute with a short timeout
-	err = executeParallelCommands("test-parallel-timeout", cmd, 100*time.Millisecond)
-
-	// Close the pipe writer and restore stdout/stderr
-	if err := w.Close(); err != nil {
-		t.Errorf("Failed to close writer: %v", err)
-	}
-
-	// Read the output
-	buf.Reset()
-	if _, err := io.Copy(&buf, r); err != nil {
-		t.Errorf("Failed to read output: %v", err)
-	}
-
-	// Check for timeout error
-	if err == nil {
-		t.Errorf("Expected timeout error but got none")
-	}
-	if !strings.Contains(err.Error(), "timed out") {
-		t.Errorf("Expected timeout error but got: %v", err)
-	}
+	// Test with a timeout - use a separate subtest to avoid race conditions
+	t.Run("Timeout", func(t *testing.T) {
+		// Set up a fresh test environment with a new mock executor
+		cleanup := setupTestEnvironment(t)
+		defer cleanup()
+		
+		// Get the mock executor
+		mockExec := cmdExecutor.(*MockExecutor)
+		
+		// Create a test command with a slow task (using shorter duration)
+		cmd := config.Command{
+			Commands: map[string]string{
+				"slow": "sleep 0.2",
+			},
+			Parallel: true,
+		}
+		
+		// Add a timeout result for the slow command
+		mockExec.AddCommandResult("sleep 0.2", "", fmt.Errorf("command timed out after 10ms"))
+		
+		// Execute the parallel commands with a short timeout
+		err := executeParallelCommands("test-parallel", cmd, 10*time.Millisecond)
+		
+		// Check that we got a timeout error
+		if err == nil {
+			t.Errorf("Expected timeout error but got none")
+		}
+		if !strings.Contains(err.Error(), "timed out") {
+			t.Errorf("Expected timeout error message, got: %v", err)
+		}
+	})
 }
