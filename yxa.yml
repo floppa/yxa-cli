@@ -6,8 +6,6 @@ variables:
   LDFLAGS: -ldflags "-s -w -X main.version=${VERSION} -X main.buildTime=${BUILD_TIME}"
   DIST_DIR: ./dist
 
-
-
 commands:
   # Build the CLI
   build:
@@ -16,7 +14,7 @@ commands:
 
   # Run tests
   test:
-    run: go test -v ./...
+    run: go test -v -race ./...
     description: Run all tests with race detection
 
   # Clean build artifacts
