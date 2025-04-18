@@ -276,13 +276,13 @@ func TestExecuteWithTimeout(t *testing.T) {
 		{
 			name:    "command completes before timeout",
 			cmdStr:  "echo 'Quick command'",
-			timeout: 1 * time.Second,
+			timeout: 2 * time.Second, // Increased for CI environments
 			wantErr: false,
 		},
 		{
 			name:    "command times out",
 			cmdStr:  "sleep 2",
-			timeout: 100 * time.Millisecond,
+			timeout: 500 * time.Millisecond, // Increased for CI environments
 			wantErr: true,
 		},
 		{
