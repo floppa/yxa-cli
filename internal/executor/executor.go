@@ -1,4 +1,4 @@
-package cmd
+package executor
 
 import (
 	"bytes"
@@ -106,10 +106,28 @@ func executeWithContext(cmd *exec.Cmd, timeout time.Duration) error {
 	case err := <-done:
 		return err
 	case <-ctx.Done():
-		// Command timed out, kill it
-		if err := cmd.Process.Kill(); err != nil {
-			return fmt.Errorf("command timed out after %s and failed to kill process: %v", timeout, err)
+		// Command timed out, try to gracefully terminate it first
+		fmt.Fprintf(os.Stderr, "Command is taking too long, attempting to terminate after %s\n", timeout)
+		
+		// First try to send SIGTERM for a graceful shutdown
+		if err := cmd.Process.Signal(os.Interrupt); err != nil {
+			fmt.Fprintf(os.Stderr, "Failed to send interrupt signal: %v\n", err)
 		}
+		
+		// Give it a short grace period to terminate
+		graceTimer := time.NewTimer(500 * time.Millisecond)
+		select {
+		case err := <-done:
+			graceTimer.Stop()
+			return fmt.Errorf("command timed out after %s and was terminated: %v", timeout, err)
+		case <-graceTimer.C:
+			// Grace period expired, force kill the process
+			fmt.Fprintf(os.Stderr, "Grace period expired, force killing the process\n")
+			if err := cmd.Process.Kill(); err != nil {
+				return fmt.Errorf("command timed out after %s and failed to kill process: %v", timeout, err)
+			}
+		}
+		
 		return fmt.Errorf("command timed out after %s", timeout)
 	}
 }
@@ -136,19 +154,30 @@ func (e *DefaultExecutor) ExecuteWithOutput(cmdStr string, timeout time.Duration
 	// For thread safety, we need to use a different approach than Execute
 	// We'll create a separate command and buffer for this operation
 	
-	// Create a buffer to capture output
-	var outputBuffer bytes.Buffer
+	// Create buffers to capture output
+	var stdoutBuffer bytes.Buffer
+	var stderrBuffer bytes.Buffer
+	
+	// Get the current stdout and stderr writers
+	e.mutex.Lock()
+	stdout := e.Stdout
+	stderr := e.Stderr
+	e.mutex.Unlock()
 	
 	// For no timeout case, use a simpler approach to avoid race conditions
 	if timeout == 0 {
 		// Create and configure the command
 		cmdExec := exec.Command("sh", "-c", cmdStr) // #nosec G204
-		cmdExec.Stdout = &outputBuffer
-		cmdExec.Stderr = &outputBuffer
+		
+		// Set up a multi-writer to capture output and also write to the original writers
+		cmdExec.Stdout = io.MultiWriter(&stdoutBuffer, stdout)
+		cmdExec.Stderr = io.MultiWriter(&stderrBuffer, stderr)
 		
 		// Run the command and wait for it to complete
 		err := cmdExec.Run()
-		return outputBuffer.String(), err
+		
+		// Return only the stdout content
+		return stdoutBuffer.String(), err
 	}
 	
 	// For timeout case, we need to handle it carefully
@@ -158,8 +187,10 @@ func (e *DefaultExecutor) ExecuteWithOutput(cmdStr string, timeout time.Duration
 	
 	// Create and configure the command with context
 	cmdExec := exec.CommandContext(ctx, "sh", "-c", cmdStr) // #nosec G204
-	cmdExec.Stdout = &outputBuffer
-	cmdExec.Stderr = &outputBuffer
+	
+	// Set up a multi-writer to capture output and also write to the original writers
+	cmdExec.Stdout = io.MultiWriter(&stdoutBuffer, stdout)
+	cmdExec.Stderr = io.MultiWriter(&stderrBuffer, stderr)
 	
 	// Run the command and wait for it to complete
 	err := cmdExec.Run()
@@ -169,5 +200,6 @@ func (e *DefaultExecutor) ExecuteWithOutput(cmdStr string, timeout time.Duration
 		return "", fmt.Errorf("command timed out after %s", timeout)
 	}
 	
-	return outputBuffer.String(), err
+	// Return only the stdout content
+	return stdoutBuffer.String(), err
 }

@@ -5,8 +5,12 @@ import (
 	"io"
 	"os"
 
-	"github.com/floppa/yxa-cli/cmd"
+	"github.com/floppa/yxa-cli/internal/cli"
 )
+
+// osExit is a variable that holds os.Exit function
+// This allows it to be mocked for testing
+var osExit = os.Exit
 
 // Version information - these will be set during build by the Makefile
 var (
@@ -14,25 +18,16 @@ var (
 	buildTime = "unknown"
 )
 
-// For testing purposes
-var (
-	osExit   = os.Exit
-	osArgs   = os.Args
-	stdout   = os.Stdout
-	cmdExecute = cmd.Execute
-	run       = runImpl
-)
-
 // main is the entry point for the application
 func main() {
 	// Run the application and exit with the returned code
-	code := run(osArgs, stdout)
+	code := run(os.Args, os.Stdout)
 	osExit(code)
 }
 
-// runImpl executes the application logic and returns an exit code
+// run executes the application logic and returns an exit code
 // This function is separate from main to make it testable
-func runImpl(args []string, out io.Writer) int {
+func run(args []string, out io.Writer) int {
 	// Check if version flag is provided
 	if len(args) > 1 && (args[1] == "-v" || args[1] == "--version") {
 		_, err := fmt.Fprintf(out, "yxa version %s (built at %s)\n", version, buildTime)
@@ -43,7 +38,18 @@ func runImpl(args []string, out io.Writer) int {
 		return 0
 	}
 
-	// Execute the CLI
-	cmdExecute()
+	// Initialize the application
+	rootCmd, err := cli.InitializeApp()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error initializing application: %v\n", err)
+		return 1
+	}
+
+	// Execute the command
+	if err := rootCmd.Execute(); err != nil {
+		fmt.Println(err)
+		return 1
+	}
+	
 	return 0
 }

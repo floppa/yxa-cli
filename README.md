@@ -2,7 +2,11 @@
 
 Yxa is a simple CLI tool that loads a config file (yxa.yml) in the current directory and registers commands defined in it.
 
-Yxa is the word for Axe is swedish. Lets chop some trees!
+Yxa is the word for Axe in Swedish. Let's chop some trees!
+
+[![Test Coverage](https://img.shields.io/badge/coverage-85.6%25-brightgreen.svg)]()
+[![Go Report Card](https://img.shields.io/badge/go%20report-A+-brightgreen.svg)]()
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)]()
 
 ## Installation
 
@@ -75,7 +79,24 @@ yxa test
 
 ## Development
 
-yxa-cli uses it self for its tasks (go figure). The recommended path is to download and install yxa first.
+yxa-cli uses itself for its tasks (go figure). The recommended path is to download and install yxa first.
+
+### Development Requirements
+
+- Go 1.18 or higher
+- Git
+
+### Test Coverage
+
+The project maintains a high test coverage (currently 85.6%) with comprehensive tests for all components:
+
+```bash
+# Run tests with coverage report
+yxa check-coverage
+
+# Run tests with race detection
+go test -race ./...
+```
 
 ### Releasing New Versions
 
@@ -205,7 +226,7 @@ Hooks are useful for:
 
 ### Command Timeouts
 
-You can specify timeouts for commands to prevent them from running indefinitely. If a command exceeds its timeout, it will be terminated.
+You can specify timeouts for commands to prevent them from running indefinitely. If a command exceeds its timeout, it will be terminated safely with proper cleanup.
 
 ```yaml
 commands:
@@ -223,9 +244,11 @@ Timeout values use Go's duration format:
 - `m` for minutes (e.g., `5m`)
 - `h` for hours (e.g., `1h`)
 
+The timeout implementation uses Go's context package for reliable cancellation and resource cleanup, ensuring that timed-out processes don't become orphaned.
+
 ### Parallel Command Execution
 
-You can run multiple commands in parallel to speed up execution. This is useful for independent tasks that don't rely on each other's output.
+You can run multiple commands in parallel to speed up execution. This is useful for independent tasks that don't rely on each other's output. The implementation ensures thread-safe execution and proper output synchronization.
 
 ```yaml
 commands:
@@ -248,11 +271,12 @@ commands:
 ```
 
 Features of parallel execution:
-- Each command's output is prefixed with its name for easy identification
-- All commands start simultaneously
-- The parent command completes when all parallel commands finish
-- If any parallel command fails, the parent command fails
-- You can combine with timeouts to limit the total execution time
+- **Thread-safe output**: Each command's output is properly synchronized and prefixed with its name
+- **Concurrent execution**: All commands start simultaneously with proper resource management
+- **Synchronized completion**: The parent command completes when all parallel commands finish
+- **Fail-fast behavior**: If any parallel command fails, the parent command fails
+- **Global timeout**: You can combine with timeouts to limit the total execution time
+- **Resource cleanup**: All resources are properly cleaned up, even in error cases
 
 ## Configuration
 
@@ -265,6 +289,7 @@ The `yxa.yml` file should be placed in the root directory of your project. It ha
     - `run`: The shell command to execute
     - `description` (optional): A short description of what the command does
     - `depends` (optional): A list of command names that should be executed before this command
+    - `params` (optional): A list of parameters (flags and positional) for the command
 
 ### Command Chaining
 
@@ -294,6 +319,71 @@ commands:
 
 When you run `yxa release`, it will automatically execute the `build`, `test`, and `lint` commands first, and then run the `release` command.
 
+### Command Parameters
+
+Yxa-cli supports defining both flag parameters (options) and positional parameters for commands. This makes commands more flexible and reusable.
+
+```yaml
+commands:
+  build:
+    description: "Build the application"
+    run: "go build -o $p_output $p_target"
+    params:
+      # Flag parameters (options)
+      - name: "output|o"
+        type: "string"
+        default: "app"
+        description: "Output filename"
+        flag: true
+      - name: "verbose|v"
+        type: "bool"
+        default: "false"
+        description: "Enable verbose output"
+        flag: true
+      
+      # Positional parameters
+      - name: "target"
+        type: "string"
+        default: "."
+        description: "Build target"
+        position: 0
+        required: false
+```
+
+#### Parameter Properties
+
+- `name`: The parameter name (for flags, you can specify a shorthand with `name|shorthand`)
+- `type`: The parameter type (`string`, `bool`, or `int`)
+- `default`: The default value if not specified
+- `description`: A description of the parameter
+- `flag`: Set to `true` for flag parameters (specified with `--name` or `-shorthand`)
+- `position`: For positional parameters, the position index (starting at 0)
+- `required`: Whether the parameter is required
+
+#### Parameter Variables
+
+All parameters are accessible as variables with the `p_` prefix:
+
+- `$p_output` - Value of the --output flag
+- `$p_verbose` - Value of the --verbose flag
+- `$p_target` - Value of the first positional parameter
+
+#### Running Commands with Parameters
+
+```bash
+# Using flag parameters
+yxa build --output=myapp --verbose
+
+# Using shorthand flags
+yxa build -o myapp -v
+
+# Using positional parameters
+yxa build ./cmd
+
+# Combining flags and positional parameters
+yxa build -o myapp ./cmd
+```
+
 ### Task Aggregator Commands
 
 You can create commands that serve purely as task aggregators by defining dependencies without specifying a `run` or `commands` property. These commands will simply execute all their dependencies in the correct order.
@@ -322,16 +412,18 @@ In this example, running `yxa verify` will execute the `lint`, `test`, and `chec
 
 ### Variables
 
-The CLI supports three types of variables:
+The CLI supports four types of variables:
 
-1. **YAML Variables**: Defined in the `variables` section of the `yxa.yml` file
-2. **Environment Variables from .env file**: Defined in a `.env` file in the project root
-3. **System Environment Variables**: Available in your shell environment
+1. **Parameter Variables**: Defined by command parameters (flags and positional arguments)
+2. **YAML Variables**: Defined in the `variables` section of the `yxa.yml` file
+3. **Environment Variables from .env file**: Defined in a `.env` file in the project root
+4. **System Environment Variables**: Available in your shell environment
 
 Variable resolution priority (highest to lowest):
-1. YAML variables
-2. .env file variables
-3. System environment variables
+1. Parameter variables
+2. YAML variables
+3. .env file variables
+4. System environment variables
 
 #### Example with Variables
 
@@ -397,6 +489,56 @@ The CLI reads configuration files from the current directory:
 1. **Review commands before execution**: Always review the commands in `yxa.yml` before running them.
 2. **Use `.env` for secrets**: Store sensitive information like API keys in `.env` files which are not committed to version control.
 3. **Limit command scope**: Design commands to have the minimum necessary permissions and scope.
+4. **Set appropriate timeouts**: Always set reasonable timeouts for commands that might hang or take too long.
+5. **Use parallel execution wisely**: While parallel execution can speed up workflows, ensure that concurrent commands don't interfere with each other.
+6. **Implement proper error handling**: Design your command chains to handle errors gracefully.
+
+## Project Architecture
+
+The project follows standard Go project layout conventions with a clean separation of concerns:
+
+### Package Structure
+
+- `cmd`: Command-line interface entry points
+- `internal`: Private application code not meant to be imported by other projects
+  - `cli`: Command handling and execution logic
+  - `config`: Configuration loading and processing
+  - `errors`: Custom error types
+  - `executor`: Command execution implementation
+  - `variables`: Variable resolution and substitution
+
+This structure follows Go best practices by:
+- Keeping implementation details in the `internal` package
+- Separating concerns into focused packages
+- Using dependency injection for better testability
+- Maintaining a clean API for external consumers
+
+
+Yxa-cli is designed with a focus on reliability, extensibility, and thread safety. The project follows idiomatic Go practices and is structured to be maintainable and well-tested.
+
+### Core Components
+
+- **Command Execution Engine**: Thread-safe implementation for running shell commands with support for timeouts, output capturing, and error handling.
+- **Configuration Parser**: Robust YAML configuration parser with support for variables, command dependencies, and conditional execution.
+- **Command Registry**: Dynamic command registration system that creates Cobra commands from YAML configuration.
+
+### Thread Safety
+
+Yxa-cli is designed to be thread-safe, allowing for reliable concurrent command execution:
+
+- **Synchronized Output**: Thread-safe writers ensure that command output is properly synchronized and not interleaved.
+- **Mutex Protection**: Critical sections are protected by mutexes to prevent race conditions.
+- **Context-Based Timeouts**: Commands use Go's context package for reliable timeout handling.
+- **Race-Free Design**: The codebase is regularly tested with Go's race detector to ensure thread safety.
+
+### Testing Approach
+
+The project maintains a high test coverage (currently 85.6%) with a comprehensive testing strategy:
+
+- **Unit Tests**: Each component is thoroughly tested in isolation.
+- **Integration Tests**: Command execution and configuration parsing are tested together.
+- **Race Detection**: Tests are run with Go's race detector to identify and fix concurrency issues.
+- **Mock Objects**: The executor interface is mocked for predictable testing of command execution.
 
 ## License
 

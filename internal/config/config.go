@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/floppa/yxa-cli/internal/variables"
 	"github.com/joho/godotenv"
 	"gopkg.in/yaml.v3"
 )
@@ -31,6 +32,7 @@ type Command struct {
 	Post        string            `yaml:"post,omitempty"`        // Command to run after the main command
 	Timeout     string            `yaml:"timeout,omitempty"`     // Timeout for command execution (e.g. "30s", "5m")
 	Parallel    bool              `yaml:"parallel,omitempty"`    // Whether to run commands in parallel
+	Params      []Param           `yaml:"params,omitempty"`      // Command parameters (flags and positional)
 }
 
 // LoadConfig loads the project configuration from the yxa.yml file
@@ -84,50 +86,52 @@ func LoadConfig() (*ProjectConfig, error) {
 
 // ReplaceVariables replaces variables in the given string with their values
 func (c *ProjectConfig) ReplaceVariables(input string) string {
-	// Define regex pattern for variables: $VAR or ${VAR}
-	pattern := regexp.MustCompile(`\$(\w+|\{\w+\})`)
+	// Create a variable resolver with the project's variables
+	resolver := variables.NewResolver().
+		WithConfigVars(c.Variables).
+		WithEnvFileVars(c.envVars)
+	
+	// Resolve variables in the input string
+	return resolver.Resolve(input)
+}
 
-	// Replace all occurrences
-	result := pattern.ReplaceAllStringFunc(input, func(match string) string {
-		// Extract variable name (remove $ and {} if present)
-		varName := match[1:] // Remove $
-		if strings.HasPrefix(varName, "{") && strings.HasSuffix(varName, "}") {
-			varName = varName[1 : len(varName)-1] // Remove { and }
-		}
-
-		// Try to get value from different sources in order of priority
-		// 1. YAML variables
-		if value, ok := c.Variables[varName]; ok {
-			return value
-		}
-
-		// 2. Environment variables from .env file
-		if value, ok := c.envVars[varName]; ok {
-			return value
-		}
-
-		// 3. System environment variables
-		if value, ok := os.LookupEnv(varName); ok {
-			return value
-		}
-
-		// If variable not found, return the original match
-		return match
-	})
-
-	return result
+// ReplaceVariablesWithParams replaces variables in the given string with their values,
+// including parameter variables
+func (c *ProjectConfig) ReplaceVariablesWithParams(input string, paramVars map[string]string) string {
+	// Create a variable resolver with all variable sources
+	resolver := variables.NewResolver().
+		WithParamVars(paramVars).
+		WithConfigVars(c.Variables).
+		WithEnvFileVars(c.envVars)
+	
+	// Resolve variables in the input string
+	return resolver.Resolve(input)
 }
 
 // EvaluateCondition evaluates a condition string and returns whether it's true
 func (c *ProjectConfig) EvaluateCondition(condition string) bool {
+	return c.EvaluateConditionWithParams(condition, nil)
+}
+
+// EvaluateConditionWithParams evaluates a condition string with parameter variables
+func (c *ProjectConfig) EvaluateConditionWithParams(condition string, paramVars map[string]string) bool {
 	if condition == "" {
 		// Empty condition is always true
 		return true
 	}
 
-	// Replace variables in the condition
-	condition = c.ReplaceVariables(condition)
+	// Replace variables in the condition using all variable sources
+	resolver := variables.NewResolver().
+		WithParamVars(paramVars).
+		WithConfigVars(c.Variables).
+		WithEnvFileVars(c.envVars)
+	condition = resolver.Resolve(condition)
 
+	// Evaluate the resolved condition
+	return evaluateConditionString(condition)
+}
+
+func evaluateConditionString(condition string) bool {
 	// Simple equality check (e.g., "$GOOS == darwin")
 	equalityPattern := regexp.MustCompile(`^\s*(.+?)\s*==\s*(.+?)\s*$`)
 	if matches := equalityPattern.FindStringSubmatch(condition); len(matches) == 3 {

@@ -1,5 +1,3 @@
-name: yxa-cli
-
 # Variables defined here can be used in commands with $VAR_NAME or ${VAR_NAME} syntax
 variables:
   BINARY_NAME: yxa
