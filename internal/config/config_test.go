@@ -273,35 +273,63 @@ func TestProcessParamDefinition(t *testing.T) {
 }
 
 func TestLoadConfig(t *testing.T) {
-	// Create a temporary directory for the test
+	tmpDir, cleanupTmp := createTempDir(t)
+	defer cleanupTmp()
+
+	_, cleanupChdir := changeToDir(t, tmpDir)
+	defer cleanupChdir()
+
+	writeConfigFile(t, "yxa.yml", testConfigContent())
+	writeConfigFile(t, ".env", testEnvContent())
+
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+
+	assertConfigBasics(t, cfg)
+	assertConfigVariables(t, cfg)
+	assertConfigCommands(t, cfg)
+	assertConfigEnvVars(t, cfg)
+}
+
+func createTempDir(t *testing.T) (string, func()) {
 	tmpDir, err := os.MkdirTemp("", "config-test")
 	if err != nil {
 		t.Fatalf("Failed to create temp dir: %v", err)
 	}
-	defer func() {
+	cleanup := func() {
 		if err := os.RemoveAll(tmpDir); err != nil {
 			t.Logf("Warning: Failed to remove temporary directory: %v", err)
 		}
-	}()
+	}
+	return tmpDir, cleanup
+}
 
-	// Save current directory
+func changeToDir(t *testing.T, dir string) (string, func()) {
 	currentDir, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("Failed to get current directory: %v", err)
 	}
-
-	// Change to the temporary directory
-	if err := os.Chdir(tmpDir); err != nil {
+	if err := os.Chdir(dir); err != nil {
 		t.Fatalf("Failed to change directory: %v", err)
 	}
-	defer func() {
+	cleanup := func() {
 		if err := os.Chdir(currentDir); err != nil {
 			t.Logf("Warning: Failed to change back to original directory: %v", err)
 		}
-	}()
+	}
+	return currentDir, cleanup
+}
 
-	// Create a test config file
-	configContent := `
+func writeConfigFile(t *testing.T, name, content string) {
+	if err := os.WriteFile(name, []byte(content), 0644); err != nil {
+		t.Fatalf("Failed to write %s: %v", name, err)
+	}
+}
+
+func testConfigContent() string {
+	return `
 name: test-project
 variables:
   PROJECT_NAME: test-project
@@ -314,50 +342,43 @@ commands:
     run: go test ./...
     description: Run tests
 `
-	if err := os.WriteFile("yxa.yml", []byte(configContent), 0644); err != nil {
-		t.Fatalf("Failed to write config file: %v", err)
-	}
+}
 
-	// Create a test .env file
-	envContent := `
+func testEnvContent() string {
+	return `
 ENV_VAR=env-value
 SECRET_KEY=secret
 `
-	if err := os.WriteFile(".env", []byte(envContent), 0644); err != nil {
-		t.Fatalf("Failed to write .env file: %v", err)
-	}
+}
 
-	// Load the config
-	cfg, err := LoadConfig()
-	if err != nil {
-		t.Fatalf("LoadConfig() error = %v", err)
-	}
-
-	// Check the config
+func assertConfigBasics(t *testing.T, cfg *ProjectConfig) {
 	if cfg.Name != "test-project" {
 		t.Errorf("cfg.Name = %v, want %v", cfg.Name, "test-project")
 	}
+}
 
+func assertConfigVariables(t *testing.T, cfg *ProjectConfig) {
 	if len(cfg.Variables) != 2 {
 		t.Errorf("len(cfg.Variables) = %v, want %v", len(cfg.Variables), 2)
 	}
-
 	if cfg.Variables["PROJECT_NAME"] != "test-project" {
 		t.Errorf("cfg.Variables[PROJECT_NAME] = %v, want %v", cfg.Variables["PROJECT_NAME"], "test-project")
 	}
+}
 
+func assertConfigCommands(t *testing.T, cfg *ProjectConfig) {
 	if len(cfg.Commands) != 2 {
 		t.Errorf("len(cfg.Commands) = %v, want %v", len(cfg.Commands), 2)
 	}
-
 	if cfg.Commands["build"].Run != "go build ./..." {
 		t.Errorf("cfg.Commands[build].Run = %v, want %v", cfg.Commands["build"].Run, "go build ./...")
 	}
+}
 
+func assertConfigEnvVars(t *testing.T, cfg *ProjectConfig) {
 	if len(cfg.envVars) != 2 {
 		t.Errorf("len(cfg.envVars) = %v, want %v", len(cfg.envVars), 2)
 	}
-
 	if cfg.envVars["ENV_VAR"] != "env-value" {
 		t.Errorf("cfg.envVars[ENV_VAR] = %v, want %v", cfg.envVars["ENV_VAR"], "env-value")
 	}

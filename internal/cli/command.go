@@ -106,63 +106,94 @@ func (h *CommandHandler) executeDependencies(cmdName string, dependencies []stri
 
 // executeCommandBody executes the main command body including pre/post hooks
 func (h *CommandHandler) executeCommandBody(cmdName string, cmd config.Command, cmdVars map[string]string) error {
-	// Execute pre-hook if defined
-	if err := h.executeHook(cmdName, "pre", cmd.Pre, cmdVars); err != nil {
+	if err := h.runPreHook(cmdName, cmd, cmdVars); err != nil {
 		return err
 	}
 
-	// Parse timeout if specified
 	timeout, err := h.parseTimeout(cmdName, cmd.Timeout)
 	if err != nil {
 		return err
 	}
 
-	// Execute the command
-	fmt.Printf("Executing command '%s'...\n", cmdName)
-
-	if cmd.Run != "" {
-		// Replace variables in the command
-		cmdStr := h.replaceVariablesInString(cmd.Run, cmdVars)
-		if h.DryRun {
-			fmt.Printf("[dry-run] Would execute: %s\n", cmdStr)
-			return nil
-		}
-		if err := h.Executor.Execute(cmdStr, timeout); err != nil {
-			return fmt.Errorf("failed to execute command '%s': %w", cmdName, err)
-		}
-	} else if len(cmd.Commands) > 0 {
-		if cmd.Parallel {
-			if h.DryRun {
-				for _, subCmd := range cmd.Commands {
-					cmdStr := h.replaceVariablesInString(subCmd, cmdVars)
-					fmt.Printf("[dry-run] Would execute (parallel): %s\n", cmdStr)
-				}
-				return nil
-			}
-			if err := h.executeParallelCommands(cmdName, cmd, timeout); err != nil {
-				return fmt.Errorf("failed to execute parallel commands for '%s': %w", cmdName, err)
-			}
-		} else {
-			if h.DryRun {
-				for _, subCmd := range cmd.Commands {
-					cmdStr := h.replaceVariablesInString(subCmd, cmdVars)
-					fmt.Printf("[dry-run] Would execute (sequential): %s\n", cmdStr)
-				}
-				return nil
-			}
-			if err := h.executeSequentialCommands(cmdName, cmd, timeout); err != nil {
-				return fmt.Errorf("failed to execute sequential commands for '%s': %w", cmdName, err)
-			}
-		}
+	if err := h.runMainCommand(cmdName, cmd, cmdVars, timeout); err != nil {
+		return err
 	}
 
-	// Execute post-hook if defined
-	if err := h.executeHook(cmdName, "post", cmd.Post, cmdVars); err != nil {
+	if err := h.runPostHook(cmdName, cmd, cmdVars); err != nil {
 		return err
 	}
 
 	return nil
 }
+
+// runPreHook executes the pre-hook if defined
+func (h *CommandHandler) runPreHook(cmdName string, cmd config.Command, cmdVars map[string]string) error {
+	return h.executeHook(cmdName, "pre", cmd.Pre, cmdVars)
+}
+
+// runMainCommand handles the main command execution logic
+func (h *CommandHandler) runMainCommand(cmdName string, cmd config.Command, cmdVars map[string]string, timeout time.Duration) error {
+	fmt.Printf("Executing command '%s'...\n", cmdName)
+
+	if cmd.Run != "" {
+		return h.runSingleCommand(cmdName, cmd, cmdVars, timeout)
+	} else if len(cmd.Commands) > 0 {
+		if cmd.Parallel {
+			return h.runParallelCommands(cmdName, cmd, cmdVars, timeout)
+		}
+		return h.runSequentialCommands(cmdName, cmd, cmdVars, timeout)
+	}
+	return nil
+}
+
+// runSingleCommand executes a single command (Run)
+func (h *CommandHandler) runSingleCommand(cmdName string, cmd config.Command, cmdVars map[string]string, timeout time.Duration) error {
+	cmdStr := h.replaceVariablesInString(cmd.Run, cmdVars)
+	if h.DryRun {
+		fmt.Printf("[dry-run] Would execute: %s\n", cmdStr)
+		return nil
+	}
+	if err := h.Executor.Execute(cmdStr, timeout); err != nil {
+		return fmt.Errorf("failed to execute command '%s': %w", cmdName, err)
+	}
+	return nil
+}
+
+// runParallelCommands executes commands in parallel
+func (h *CommandHandler) runParallelCommands(cmdName string, cmd config.Command, cmdVars map[string]string, timeout time.Duration) error {
+	if h.DryRun {
+		for _, subCmd := range cmd.Commands {
+			cmdStr := h.replaceVariablesInString(subCmd, cmdVars)
+			fmt.Printf("[dry-run] Would execute (parallel): %s\n", cmdStr)
+		}
+		return nil
+	}
+	if err := h.executeParallelCommands(cmdName, cmd, timeout); err != nil {
+		return fmt.Errorf("failed to execute parallel commands for '%s': %w", cmdName, err)
+	}
+	return nil
+}
+
+// runSequentialCommands executes commands sequentially
+func (h *CommandHandler) runSequentialCommands(cmdName string, cmd config.Command, cmdVars map[string]string, timeout time.Duration) error {
+	if h.DryRun {
+		for _, subCmd := range cmd.Commands {
+			cmdStr := h.replaceVariablesInString(subCmd, cmdVars)
+			fmt.Printf("[dry-run] Would execute (sequential): %s\n", cmdStr)
+		}
+		return nil
+	}
+	if err := h.executeSequentialCommands(cmdName, cmd, timeout); err != nil {
+		return fmt.Errorf("failed to execute sequential commands for '%s': %w", cmdName, err)
+	}
+	return nil
+}
+
+// runPostHook executes the post-hook if defined
+func (h *CommandHandler) runPostHook(cmdName string, cmd config.Command, cmdVars map[string]string) error {
+	return h.executeHook(cmdName, "post", cmd.Post, cmdVars)
+}
+
 
 // executeHook executes a pre or post hook for a command
 func (h *CommandHandler) executeHook(cmdName, hookType, hookCmd string, cmdVars map[string]string) error {
