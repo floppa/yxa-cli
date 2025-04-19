@@ -201,8 +201,7 @@ func TestCommandHandler_ExecuteCommandWithParallelCommands(t *testing.T) {
 	}
 }
 
-func TestCommandHandler_ExecuteCommandWithSequentialCommands(t *testing.T) {
-	// Use real executor with buffer for output-based tests
+func TestCommandHandler_SequentialCommands_Success(t *testing.T) {
 	buf := &strings.Builder{}
 	realExec := executor.NewDefaultExecutor()
 	realExec.SetStdout(buf)
@@ -244,11 +243,15 @@ func TestCommandHandler_ExecuteCommandWithSequentialCommands(t *testing.T) {
 	if !strings.Contains(output, "seq1") || !strings.Contains(output, "seq2") {
 		t.Errorf("Expected output to contain 'seq1' and 'seq2', got '%s'", output)
 	}
+}
 
-	// Test with a command that fails
-	buf.Reset()
-	// Create a new config with a failing command
-	cfg = &config.ProjectConfig{
+func TestCommandHandler_SequentialCommands_Failure(t *testing.T) {
+	buf := &strings.Builder{}
+	realExec := executor.NewDefaultExecutor()
+	realExec.SetStdout(buf)
+	realExec.SetStderr(buf)
+
+	cfg := &config.ProjectConfig{
 		Name: "test-project",
 		Commands: map[string]config.Command{
 			"sequential-with-error": {
@@ -260,25 +263,18 @@ func TestCommandHandler_ExecuteCommandWithSequentialCommands(t *testing.T) {
 		},
 	}
 
-	// Use real executor and buffer for output
-	buf.Reset()
-	realExec.SetStdout(buf)
-	realExec.SetStderr(buf)
-	handler = NewCommandHandler(cfg, realExec)
+	handler := NewCommandHandler(cfg, realExec)
 
-	// Test executing a command with a failing sequential subcommand
-	err = handler.ExecuteCommand("sequential-with-error", nil)
+	err := handler.ExecuteCommand("sequential-with-error", nil)
 	if err == nil {
 		t.Errorf("Expected error for failing command, got nil")
 	}
 
-	// Verify first command was executed but second failed
-	output = buf.String()
+	output := buf.String()
 	if !strings.Contains(output, "seq1") {
 		t.Errorf("Expected output to contain 'seq1' before failure, got '%s'", output)
 	}
 
-	// Optionally, check that the error message contains 'failed'
 	if err != nil && !strings.Contains(err.Error(), "failed") {
 		t.Errorf("Expected error to contain 'failed', got '%v'", err)
 	}
