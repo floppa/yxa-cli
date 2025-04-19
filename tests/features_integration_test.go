@@ -13,6 +13,30 @@ import (
 
 // TestYxaFeatures tests all the major features of the Yxa CLI in an integrated manner
 func TestYxaFeatures(t *testing.T) {
+	// --- Helpers ---
+	writeFile := func(t *testing.T, path, content string) {
+		t.Helper()
+		require.NoError(t, os.WriteFile(path, []byte(content), 0644), "Failed to write file: %s", path)
+	}
+	removeFile := func(t *testing.T, path string) {
+		t.Helper()
+		if err := os.Remove(path); err != nil && !os.IsNotExist(err) {
+			t.Logf("Warning: Failed to remove %s: %v", path, err)
+		}
+	}
+	readFile := func(t *testing.T, path string) string {
+		t.Helper()
+		content, err := os.ReadFile(path)
+		require.NoError(t, err, "Should be able to read file: %s", path)
+		return string(content)
+	}
+	makeDir := func(t *testing.T, path string) {
+		t.Helper()
+		require.NoError(t, os.MkdirAll(path, 0755), "Failed to create directory: %s", path)
+	}
+	
+	// --- Global setup ---
+
 	// Create a temporary directory for test files
 	tempDir, err := os.MkdirTemp("", "yxa-features-test")
 	require.NoError(t, err, "Failed to create temp dir")
@@ -42,14 +66,14 @@ ENV_VAR1=value1
 ENV_VAR2=value2
 TEST_MODE=integration
 `
-	require.NoError(t, os.WriteFile(".env", []byte(envFileContent), 0644), "Failed to write .env file")
+	writeFile(t, ".env", envFileContent)
 
 	// Create a test file to be used by commands
 	testFileContent := "This is a test file\nWith multiple lines\nFor testing purposes\n"
-	require.NoError(t, os.WriteFile("test-file.txt", []byte(testFileContent), 0644), "Failed to write test file")
+	writeFile(t, "test-file.txt", testFileContent)
 
 	// Create the output directory structure
-	require.NoError(t, os.MkdirAll(filepath.Join(tempDir, "output"), 0755), "Failed to create output directory")
+	makeDir(t, filepath.Join(tempDir, "output"))
 
 	// Create a comprehensive yxa.yml file that tests all features
 	yxaConfig := `name: yxa-test-project
@@ -141,7 +165,7 @@ commands:
   failing:
     run: command_that_does_not_exist
     description: A command that should fail`
-	require.NoError(t, os.WriteFile("yxa.yml", []byte(yxaConfig), 0644), "Failed to write yxa.yml file")
+	writeFile(t, "yxa.yml", yxaConfig)
 
 	// Build the yxa CLI binary path
 	yxaBinary := filepath.Join(currentDir, "..", "yxa")
@@ -164,9 +188,7 @@ commands:
 
 	t.Run("2. Command Dependencies", func(t *testing.T) {
 		// Clean up any existing output file
-		if err := os.Remove(filepath.Join(tempDir, "output", "output.txt")); err != nil && !os.IsNotExist(err) {
-			t.Logf("Warning: Failed to remove output file: %v", err)
-		}
+		removeFile(t, filepath.Join(tempDir, "output", "output.txt"))
 
 		cmd := exec.Command(yxaBinary, "write-file")
 		output, err := cmd.CombinedOutput()
@@ -174,7 +196,7 @@ commands:
 
 		// Verify the output file was created
 		outputFile := filepath.Join(tempDir, "output", "output.txt")
-		content, err := os.ReadFile(outputFile)
+		content := readFile(t, outputFile)
 		assert.NoError(t, err, "Should be able to read output file")
 		assert.Contains(t, string(content), "Content from write-file", "File should contain expected content")
 	})
@@ -231,15 +253,11 @@ commands:
 
 	t.Run("8. Parallel Execution", func(t *testing.T) {
 		// Make sure output directory exists
-		require.NoError(t, os.MkdirAll(filepath.Join(tempDir, "output"), 0755), "Failed to create output directory")
+		makeDir(t, filepath.Join(tempDir, "output"))
 
 		// Clean up any existing output files
-		if err := os.Remove(filepath.Join(tempDir, "output", "parallel1.txt")); err != nil && !os.IsNotExist(err) {
-			t.Logf("Warning: Failed to remove parallel1.txt: %v", err)
-		}
-		if err := os.Remove(filepath.Join(tempDir, "output", "parallel2.txt")); err != nil && !os.IsNotExist(err) {
-			t.Logf("Warning: Failed to remove parallel2.txt: %v", err)
-		}
+		removeFile(t, filepath.Join(tempDir, "output", "parallel1.txt"))
+		removeFile(t, filepath.Join(tempDir, "output", "parallel2.txt"))
 
 		// Run the prepare command first to ensure output directory exists
 		prepCmd := exec.Command(yxaBinary, "prepare")
@@ -249,7 +267,7 @@ commands:
 		// Double-check that the output directory exists
 		outputDir := filepath.Join(tempDir, "output")
 		if _, err := os.Stat(outputDir); os.IsNotExist(err) {
-			require.NoError(t, os.MkdirAll(outputDir, 0755), "Failed to create output directory")
+			makeDir(t, outputDir)
 		}
 
 		start := time.Now()
@@ -282,15 +300,11 @@ commands:
 
 	t.Run("9. Sequential Execution", func(t *testing.T) {
 		// Make sure output directory exists
-		require.NoError(t, os.MkdirAll(filepath.Join(tempDir, "output"), 0755), "Failed to create output directory")
+		makeDir(t, filepath.Join(tempDir, "output"))
 
 		// Clean up any existing output files
-		if err := os.Remove(filepath.Join(tempDir, "output", "seq1.txt")); err != nil && !os.IsNotExist(err) {
-			t.Logf("Warning: Failed to remove seq1.txt: %v", err)
-		}
-		if err := os.Remove(filepath.Join(tempDir, "output", "seq2.txt")); err != nil && !os.IsNotExist(err) {
-			t.Logf("Warning: Failed to remove seq2.txt: %v", err)
-		}
+		removeFile(t, filepath.Join(tempDir, "output", "seq1.txt"))
+		removeFile(t, filepath.Join(tempDir, "output", "seq2.txt"))
 
 		// Run the prepare command first to ensure output directory exists
 		prepCmd := exec.Command(yxaBinary, "prepare")
@@ -300,7 +314,7 @@ commands:
 		// Double-check that the output directory exists
 		outputDir := filepath.Join(tempDir, "output")
 		if _, err := os.Stat(outputDir); os.IsNotExist(err) {
-			require.NoError(t, os.MkdirAll(outputDir, 0755), "Failed to create output directory")
+			makeDir(t, outputDir)
 		}
 
 		cmd := exec.Command(yxaBinary, "sequential-parent")
@@ -331,15 +345,9 @@ commands:
 
 	t.Run("10. Command with Hooks", func(t *testing.T) {
 		// Clean up any existing output files
-		if err := os.Remove(filepath.Join(tempDir, "output", "pre.txt")); err != nil && !os.IsNotExist(err) {
-			t.Logf("Warning: Failed to remove pre.txt: %v", err)
-		}
-		if err := os.Remove(filepath.Join(tempDir, "output", "main.txt")); err != nil && !os.IsNotExist(err) {
-			t.Logf("Warning: Failed to remove main.txt: %v", err)
-		}
-		if err := os.Remove(filepath.Join(tempDir, "output", "post.txt")); err != nil && !os.IsNotExist(err) {
-			t.Logf("Warning: Failed to remove post.txt: %v", err)
-		}
+		removeFile(t, filepath.Join(tempDir, "output", "pre.txt"))
+		removeFile(t, filepath.Join(tempDir, "output", "main.txt"))
+		removeFile(t, filepath.Join(tempDir, "output", "post.txt"))
 
 		cmd := exec.Command(yxaBinary, "with-hooks")
 		output, err := cmd.CombinedOutput()
@@ -355,9 +363,9 @@ commands:
 		assert.FileExists(t, postFile, "post.txt should be created by post-hook")
 
 		// Verify content of each file
-		preContent, _ := os.ReadFile(preFile)
-		mainContent, _ := os.ReadFile(mainFile)
-		postContent, _ := os.ReadFile(postFile)
+		preContent := readFile(t, preFile)
+		mainContent := readFile(t, mainFile)
+		postContent := readFile(t, postFile)
 
 		assert.Contains(t, string(preContent), "Pre-hook execution", "Pre-hook should execute correctly")
 		assert.Contains(t, string(mainContent), "Main command execution", "Main command should execute correctly")
@@ -366,9 +374,7 @@ commands:
 
 	t.Run("11. Environment Variables", func(t *testing.T) {
 		// Clean up any existing output file
-		if err := os.Remove(filepath.Join(tempDir, "output", "env.txt")); err != nil && !os.IsNotExist(err) {
-			t.Logf("Warning: Failed to remove env.txt: %v", err)
-		}
+		removeFile(t, filepath.Join(tempDir, "output", "env.txt"))
 
 		cmd := exec.Command(yxaBinary, "env-vars")
 		output, err := cmd.CombinedOutput()
@@ -376,7 +382,7 @@ commands:
 
 		// Verify the output file was created
 		envFile := filepath.Join(tempDir, "output", "env.txt")
-		content, err := os.ReadFile(envFile)
+		content := readFile(t, envFile)
 		assert.NoError(t, err, "Should be able to read env file")
 
 		// Check that environment variables were properly substituted
