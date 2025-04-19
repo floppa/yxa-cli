@@ -38,15 +38,15 @@ func TestNewRootCommand(t *testing.T) {
 	}
 
 	// Create a mock executor
-	mockExec := executor.NewMockExecutor()
+	realExec := executor.NewDefaultExecutor()
 
 	// Create a root command
-	root := NewRootCommand(cfg, mockExec)
+	root := NewRootCommand(cfg, realExec)
 
 	// Verify the root command
 	assert.NotNil(t, root)
 	assert.Equal(t, cfg, root.Config)
-	assert.Equal(t, mockExec, root.Executor)
+	assert.Equal(t, realExec, root.Executor)
 	assert.NotNil(t, root.Handler)
 	assert.NotNil(t, root.RootCmd)
 	assert.Equal(t, "yxa", root.RootCmd.Use)
@@ -107,10 +107,10 @@ func TestRootCommand_Execute(t *testing.T) {
 	}
 
 	// Create a mock executor
-	mockExec := executor.NewMockExecutor()
+	realExec := executor.NewDefaultExecutor()
 
 	// Create a root command
-	root := NewRootCommand(cfg, mockExec)
+	root := NewRootCommand(cfg, realExec)
 
 	// Test execution with no arguments (should show help)
 	t.Run("no args", func(t *testing.T) {
@@ -136,19 +136,16 @@ func TestRootCommand_Execute(t *testing.T) {
 	// Test execution with an existing command
 	t.Run("existing command", func(t *testing.T) {
 		// Create a new mock executor for this test to avoid state from previous tests
-		mockExec := executor.NewMockExecutor()
-		root := NewRootCommand(cfg, mockExec)
+		realExec := executor.NewDefaultExecutor()
+		root := NewRootCommand(cfg, realExec)
 		
 		// Capture stdout
 		stdout := &bytes.Buffer{}
 		stderr := &bytes.Buffer{}
 		root.RootCmd.SetOut(stdout)
 		root.RootCmd.SetErr(stderr)
-		mockExec.SetStdout(stdout)
-		mockExec.SetStderr(stderr)
-		
-		// Add expected result for the command
-		mockExec.AddCommandResult("echo 'Test command'", "Test command\n", nil)
+		realExec.SetStdout(stdout)
+		realExec.SetStderr(stderr)
 		
 		// Set args
 		root.RootCmd.SetArgs([]string{"test"})
@@ -157,30 +154,29 @@ func TestRootCommand_Execute(t *testing.T) {
 		err := root.Execute()
 		assert.NoError(t, err)
 		
+		// Verify output
+		output := stdout.String()
+		assert.Contains(t, output, "Test command")
+		
 		// Verify mock executor was called
-		executedCmds := mockExec.GetExecutedCommands()
-		assert.GreaterOrEqual(t, len(executedCmds), 1, "At least one command should have been executed")
+		
 	})
 
 	// Test execution with a non-existent command
 	t.Run("non-existent command", func(t *testing.T) {
-		// Create a new mock executor for this test to avoid state from previous tests
-		mockExec := executor.NewMockExecutor()
-		root := NewRootCommand(cfg, mockExec)
-		
-		// Capture stdout
+		// Use real executor and buffer for output
 		stdout := &bytes.Buffer{}
 		stderr := &bytes.Buffer{}
+		realExec := executor.NewDefaultExecutor()
+		realExec.SetStdout(stdout)
+		realExec.SetStderr(stderr)
+		root := NewRootCommand(cfg, realExec)
 		root.RootCmd.SetOut(stdout)
 		root.RootCmd.SetErr(stderr)
-		
-		// Set args
 		root.RootCmd.SetArgs([]string{"non-existent"})
-		
 		// Execute
 		err := root.Execute()
 		assert.Error(t, err)
-		
 		// Verify error message
 		errOutput := stderr.String()
 		assert.Contains(t, errOutput, "unknown command")

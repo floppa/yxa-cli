@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"fmt"
 	"strings"
 	"testing"
 
@@ -11,7 +10,7 @@ import (
 
 func TestCommandHandler_ExecuteHook(t *testing.T) {
 	// Create a mock executor
-	mockExec := executor.NewMockExecutor()
+	realExec := executor.NewDefaultExecutor()
 	
 	// Create a test config
 	cfg := &config.ProjectConfig{
@@ -29,14 +28,13 @@ func TestCommandHandler_ExecuteHook(t *testing.T) {
 		},
 	}
 
-	// Add command results
-	mockExec.AddCommandResult("echo 'pre-hook'", "pre-hook", nil)
-	mockExec.AddCommandResult("echo 'post-hook'", "post-hook", nil)
-	mockExec.AddCommandResult("echo 'main command'", "main command", nil)
-	mockExec.AddCommandResult("echo 'failing-hook'", "", fmt.Errorf("hook failed"))
+	// Use a buffer for output
+	buf := &strings.Builder{}
+	realExec.SetStdout(buf)
+	realExec.SetStderr(buf)
 
 	// Create a command handler
-	handler := NewCommandHandler(cfg, mockExec)
+	handler := NewCommandHandler(cfg, realExec)
 
 	// Test executing a pre-hook
 	err := handler.executeHook("with-hooks", "pre", "echo 'pre-hook'", nil)
@@ -45,13 +43,14 @@ func TestCommandHandler_ExecuteHook(t *testing.T) {
 	}
 
 	// Verify pre-hook was executed
-	output := mockExec.GetOutput()
+	output := buf.String()
 	if !strings.Contains(output, "pre-hook") {
 		t.Errorf("Expected output to contain 'pre-hook', got '%s'", output)
 	}
+	buf.Reset()
 
-	// Clear output for next test
-	mockExec.ClearOutput()
+
+	buf.Reset()
 
 	// Test executing a post-hook
 	err = handler.executeHook("with-hooks", "post", "echo 'post-hook'", nil)
@@ -60,13 +59,11 @@ func TestCommandHandler_ExecuteHook(t *testing.T) {
 	}
 
 	// Verify post-hook was executed
-	output = mockExec.GetOutput()
+	output = buf.String()
 	if !strings.Contains(output, "post-hook") {
 		t.Errorf("Expected output to contain 'post-hook', got '%s'", output)
 	}
-
-	// Clear output for next test
-	mockExec.ClearOutput()
+	buf.Reset()
 
 	// Test executing a hook with variables
 	vars := map[string]string{"PARAM": "param-value"}
@@ -74,12 +71,10 @@ func TestCommandHandler_ExecuteHook(t *testing.T) {
 	if err != nil {
 		t.Errorf("executeHook() with vars error = %v", err)
 	}
+	buf.Reset()
 
-	// Clear output for next test
-	mockExec.ClearOutput()
-
-	// Test executing a failing hook
-	err = handler.executeHook("with-hooks", "pre", "echo 'failing-hook'", nil)
+	// Test executing a failing hook (simulate error with 'false')
+	err = handler.executeHook("with-hooks", "pre", "false", nil)
 	if err == nil {
 		t.Errorf("Expected error for failing hook, got nil")
 	}

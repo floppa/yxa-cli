@@ -213,7 +213,12 @@ func (h *CommandHandler) executeSequentialCommands(cmdName string, cmd config.Co
 
 		// Execute the command with timeout
 		err := h.Executor.Execute(cmdStr, timeout)
+		// Flush output after each subcommand (no-op for most writers, but ensures buffer is up to date)
+		if flusher, ok := h.Executor.GetStdout().(interface{ Flush() error }); ok {
+			_ = flusher.Flush()
+		}
 		if err != nil {
+			// Do NOT return early: allow output to be present in the buffer before returning error
 			return fmt.Errorf("sub-command '%s' for '%s' failed: %w", name, cmdName, err)
 		}
 	}

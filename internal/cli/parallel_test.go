@@ -102,14 +102,14 @@ func TestSafeWriter(t *testing.T) {
 func TestExecuteParallelCommands(t *testing.T) {
 	t.Run("Successful Parallel Execution", func(t *testing.T) {
 		// Create a mock executor
-		mockExec := executor.NewMockExecutor()
+		realExec := executor.NewDefaultExecutor()
 		
-		// Configure the mock executor to handle the commands we expect
-		mockExec.AddCommandResult("echo value1", "value1", nil)
-		mockExec.AddCommandResult("echo value2", "value2", nil)
-		mockExec.AddCommandResult("echo test", "test", nil)
-		
-		// Create a command handler with the mock executor
+		// Use a buffer for output
+		buf := &bytes.Buffer{}
+		realExec.SetStdout(buf)
+		realExec.SetStderr(buf)
+
+		// Create a command handler with the real executor
 		handler := &CommandHandler{
 			Config: &config.ProjectConfig{
 				Variables: map[string]string{
@@ -117,10 +117,10 @@ func TestExecuteParallelCommands(t *testing.T) {
 					"VAR2": "value2",
 				},
 			},
-			Executor:     mockExec,
+			Executor:     realExec,
 			executedCmds: make(map[string]bool),
 		}
-		
+
 		// Create a command with parallel sub-commands
 		cmd := config.Command{
 			Commands: map[string]string{
@@ -130,65 +130,62 @@ func TestExecuteParallelCommands(t *testing.T) {
 			},
 			Parallel: true,
 		}
-		
+
 		// Execute the parallel commands
 		err := handler.executeParallelCommands("test-parallel", cmd, 0)
 		assert.NoError(t, err)
-		
+
 		// Check the output contains the expected content
-		// The mock executor will have captured the output
-		output := mockExec.GetOutput()
+		output := buf.String()
 		t.Logf("Output: %s", output)
-		
-		// The output should contain the values from our commands
 		assert.Contains(t, output, "value1")
 		assert.Contains(t, output, "value2")
 		assert.Contains(t, output, "test")
+		buf.Reset()
+
 	})
 	
 	t.Run("Parallel Execution With Errors", func(t *testing.T) {
-		// Create a mock executor with custom error behavior
-		mockExec := executor.NewMockExecutor()
-		
-		// Configure the mock executor to handle specific commands
-		mockExec.AddCommandResult("echo success1", "success1", nil)
-		mockExec.AddCommandResult("echo success2", "success2", nil)
-		mockExec.AddCommandResult("fail command", "", fmt.Errorf("command failed: fail command"))
-		
-		// Create a command handler with the mock executor
+		// Use a buffer for output
+		realExec := executor.NewDefaultExecutor()
+		buf := &bytes.Buffer{}
+		realExec.SetStdout(buf)
+		realExec.SetStderr(buf)
+
+		// Create a command handler with the real executor
 		handler := &CommandHandler{
 			Config: &config.ProjectConfig{
 				Variables: map[string]string{},
 			},
-			Executor:     mockExec,
+			Executor:     realExec,
 			executedCmds: make(map[string]bool),
 		}
-		
+
 		// Create a command with parallel sub-commands, one of which will fail
 		cmd := config.Command{
 			Commands: map[string]string{
 				"cmd1": "echo success1",
-				"cmd2": "fail command",
+				"cmd2": "false",
 				"cmd3": "echo success2",
 			},
 			Parallel: true,
 		}
-		
+
 		// Execute the parallel commands
 		err := handler.executeParallelCommands("test-parallel-errors", cmd, 0)
-		
+
 		// Should return an error
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "one or more parallel commands failed")
 		assert.Contains(t, err.Error(), "sub-command 'cmd2' for 'test-parallel-errors' failed")
-		
-		// Check the output contains the successful commands
-		output := mockExec.GetOutput()
+
+		// Note: Output from parallel commands may not be in order or may be missing if a command fails early.
+		output := buf.String()
 		t.Logf("Output: %s", output)
-		
-		// The output should contain the values from our successful commands
 		assert.Contains(t, output, "success1")
 		assert.Contains(t, output, "success2")
+		buf.Reset()
+
 	})
 	
 	t.Run("Parallel Execution With Timeout", func(t *testing.T) {
@@ -197,51 +194,49 @@ func TestExecuteParallelCommands(t *testing.T) {
 			t.Skip("Skipping timeout test in short mode")
 		}
 		
-		// Create a mock executor with custom timeout behavior
-		mockExec := executor.NewMockExecutor()
-		
-		// Configure the mock executor to handle specific commands
-		mockExec.AddCommandResult("echo quick1", "quick1", nil)
-		mockExec.AddCommandResult("echo quick2", "quick2", nil)
-		
-		// For the timeout test, simulate a timeout error for the slow command
-		mockExec.AddCommandResult("slow command", "", fmt.Errorf("command timed out after 50ms"))
-		
-		// Create a command handler with the mock executor
+		// Use a buffer for output
+		realExec := executor.NewDefaultExecutor()
+		buf := &bytes.Buffer{}
+		realExec.SetStdout(buf)
+		realExec.SetStderr(buf)
+
+		// Create a command handler with the real executor
 		handler := &CommandHandler{
 			Config: &config.ProjectConfig{
 				Variables: map[string]string{},
 			},
-			Executor:     mockExec,
+			Executor:     realExec,
 			executedCmds: make(map[string]bool),
 		}
-		
+
 		// Create a command with parallel sub-commands, one of which is slow
 		cmd := config.Command{
 			Commands: map[string]string{
 				"cmd1": "echo quick1",
-				"cmd2": "slow command",
+				"cmd2": "sleep 2",
 				"cmd3": "echo quick2",
 			},
 			Parallel: true,
 		}
-		
+
 		// Execute the parallel commands with a short timeout
 		err := handler.executeParallelCommands("test-parallel-timeout", cmd, 50*time.Millisecond)
-		
+
 		// Log the error for debugging
 		if err != nil {
 			t.Logf("Error: %v", err)
 		}
-		
+
 		// Should return an error
 		assert.Error(t, err, "Expected an error due to timeout or command failure")
-		
+
 		// Check the output for the quick commands
-		output := mockExec.GetOutput()
+		output := buf.String()
 		t.Logf("Output: %s", output)
 		assert.Contains(t, output, "quick1")
 		assert.Contains(t, output, "quick2")
+		buf.Reset()
+
 	})
 }
 

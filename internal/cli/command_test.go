@@ -11,12 +11,12 @@ import (
 )
 
 func TestCommandHandler_ExecuteCommand(t *testing.T) {
-	// Create a mock executor
-	mockExec := executor.NewMockExecutor()
-	mockExec.AddCommandResult("echo 'test command'", "test command", nil)
-	mockExec.AddCommandResult("echo 'dependent command'", "dependent command", nil)
+	// Use real executor with buffer for output-based tests
+	buf := &strings.Builder{}
+	realExec := executor.NewDefaultExecutor()
+	realExec.SetStdout(buf)
+	realExec.SetStderr(buf)
 
-	// Create a test config
 	cfg := &config.ProjectConfig{
 		Name: "test-project",
 		Variables: map[string]string{
@@ -49,109 +49,90 @@ func TestCommandHandler_ExecuteCommand(t *testing.T) {
 		},
 	}
 
-	// Create a command handler
-	handler := NewCommandHandler(cfg, mockExec)
+	handler := NewCommandHandler(cfg, realExec)
 
 	// Test executing a simple command
 	err := handler.ExecuteCommand("test", nil)
 	if err != nil {
 		t.Errorf("ExecuteCommand() error = %v", err)
 	}
-
-	// Verify output
-	output := mockExec.GetOutput()
-	if output != "test commandtest command" {
-		t.Errorf("Expected output 'test commandtest command', got '%s'", output)
+	output := buf.String()
+	if !strings.Contains(output, "test command") {
+		t.Errorf("Expected output to contain 'test command', got '%s'", output)
 	}
 
-	// Clear output for next test
-	mockExec.ClearOutput()
+	buf.Reset()
 
 	// Test executing a command with dependencies
-	mockExec.AddCommandResult("echo 'with dependencies'", "with dependencies", nil)
 	err = handler.ExecuteCommand("with-deps", nil)
 	if err != nil {
 		t.Errorf("ExecuteCommand() with deps error = %v", err)
 	}
-
-	// Verify all commands were executed
-	output = mockExec.GetOutput()
-	if output != "dependent commanddependent commandwith dependencieswith dependencies" {
-		t.Errorf("Expected combined output, got '%s'", output)
+	output = buf.String()
+	if !strings.Contains(output, "dependent command") || !strings.Contains(output, "with dependencies") {
+		t.Errorf("Expected combined output to contain dependencies and main command, got '%s'", output)
 	}
 
-	// Clear output for next test
-	mockExec.ClearOutput()
+	buf.Reset()
 
 	// Test executing a command with a true condition
-	mockExec.AddCommandResult("echo 'conditional command'", "conditional command", nil)
 	err = handler.ExecuteCommand("with-condition", nil)
 	if err != nil {
 		t.Errorf("ExecuteCommand() with condition error = %v", err)
 	}
-
-	// Verify command was executed
-	output = mockExec.GetOutput()
-	if output != "conditional commandconditional command" {
-		t.Errorf("Expected 'conditional commandconditional command', got '%s'", output)
+	output = buf.String()
+	if !strings.Contains(output, "conditional command") {
+		t.Errorf("Expected output to contain 'conditional command', got '%s'", output)
 	}
 
-	// Clear output for next test
-	mockExec.ClearOutput()
+	buf.Reset()
 
 	// Test executing a command with a false condition
 	err = handler.ExecuteCommand("with-false-condition", nil)
 	if err != nil {
 		t.Errorf("ExecuteCommand() with false condition error = %v", err)
 	}
-
-	// Verify command was executed (since we're now forcing execution)
-	output = mockExec.GetOutput()
-	if output != "should not run\nshould not run\n" {
-		t.Errorf("Expected 'should not run\nshould not run\n', got '%s'", output)
+	output = buf.String()
+	if !strings.Contains(output, "should not run") {
+		t.Errorf("Expected output to contain 'should not run', got '%s'", output)
 	}
 }
 
 func TestCommandHandler_ExecuteCommandWithTimeout(t *testing.T) {
-	// Create a mock executor
-	mockExec := executor.NewMockExecutor()
-	
-	// Create a test config with timeout
+	// Use real executor with buffer for output-based tests
+	buf := &strings.Builder{}
+	realExec := executor.NewDefaultExecutor()
+	realExec.SetStdout(buf)
+	realExec.SetStderr(buf)
+
 	cfg := &config.ProjectConfig{
 		Name: "test-project",
 		Commands: map[string]config.Command{
 			"with-timeout": {
-				Run:         "echo 'timeout command'",
+				Run:         "sleep 2 && echo 'timeout command'",
 				Description: "Command with timeout",
 				Timeout:     "2s",
 			},
 		},
 	}
 
-	// Add command result
-	mockExec.AddCommandResult("echo 'timeout command'", "timeout command", nil)
+	handler := NewCommandHandler(cfg, realExec)
 
-	// Create a command handler
-	handler := NewCommandHandler(cfg, mockExec)
-
-	// Test executing a command with timeout
 	err := handler.ExecuteCommand("with-timeout", nil)
-	if err != nil {
-		t.Errorf("ExecuteCommand() with timeout error = %v", err)
+	if err == nil || !strings.Contains(err.Error(), "timed out") {
+		t.Errorf("Expected timeout error, got: %v", err)
 	}
-
-	// Verify command was executed
-	output := mockExec.GetOutput()
-	if output != "timeout commandtimeout command" {
-		t.Errorf("Expected 'timeout commandtimeout command', got '%s'", output)
-	}
+	// Output may or may not contain 'timeout command' depending on timing; do not assert on output.
+	t.Logf("Output was: %q", buf.String())
 }
 
 func TestCommandHandler_ExecuteCommandWithParams(t *testing.T) {
-	// Create a mock executor
-	mockExec := executor.NewMockExecutor()
-	
-	// Create a test config
+	// Use real executor with buffer for output-based tests
+	buf := &strings.Builder{}
+	realExec := executor.NewDefaultExecutor()
+	realExec.SetStdout(buf)
+	realExec.SetStderr(buf)
+
 	cfg := &config.ProjectConfig{
 		Name: "test-project",
 		Variables: map[string]string{
@@ -165,35 +146,29 @@ func TestCommandHandler_ExecuteCommandWithParams(t *testing.T) {
 		},
 	}
 
-	// Add command result with parameter substitution
-	mockExec.AddCommandResult("echo 'param-value'", "param-value", nil)
+	handler := NewCommandHandler(cfg, realExec)
 
-	// Create a command handler
-	handler := NewCommandHandler(cfg, mockExec)
-
-	// Create parameter variables
 	paramVars := map[string]string{
 		"PARAM_VALUE": "param-value",
 	}
 
-	// Test executing a command with parameters
 	err := handler.ExecuteCommand("with-params", paramVars)
 	if err != nil {
 		t.Errorf("ExecuteCommand() with params error = %v", err)
 	}
-
-	// Verify command was executed with parameter substitution
-	output := mockExec.GetOutput()
-	if output != "param-valueparam-value" {
-		t.Errorf("Expected 'param-valueparam-value', got '%s'", output)
+	output := buf.String()
+	if !strings.Contains(output, "param-value") {
+		t.Errorf("Expected output to contain 'param-value', got '%s'", output)
 	}
 }
 
 func TestCommandHandler_ExecuteCommandWithParallelCommands(t *testing.T) {
-	// Create a mock executor
-	mockExec := executor.NewMockExecutor()
-	
-	// Create a test config with parallel commands
+	// Use real executor with buffer for output-based tests
+	buf := &strings.Builder{}
+	realExec := executor.NewDefaultExecutor()
+	realExec.SetStdout(buf)
+	realExec.SetStderr(buf)
+
 	cfg := &config.ProjectConfig{
 		Name: "test-project",
 		Commands: map[string]config.Command{
@@ -214,32 +189,25 @@ func TestCommandHandler_ExecuteCommandWithParallelCommands(t *testing.T) {
 		},
 	}
 
-	// Add command results
-	mockExec.AddCommandResult("echo 'parallel1'", "parallel1", nil)
-	mockExec.AddCommandResult("echo 'parallel2'", "parallel2", nil)
+	handler := NewCommandHandler(cfg, realExec)
 
-	// Create a command handler
-	handler := NewCommandHandler(cfg, mockExec)
-
-	// Test executing a command with parallel subcommands
 	err := handler.ExecuteCommand("parallel-parent", nil)
 	if err != nil {
 		t.Errorf("ExecuteCommand() with parallel commands error = %v", err)
 	}
-
-	// Verify both commands were executed (order may vary)
-	output := mockExec.GetOutput()
-	// The test output shows it's getting "[parallel1] parallel1\n"
-	if !strings.Contains(output, "parallel1") {
-		t.Errorf("Expected output to contain 'parallel1', got '%s'", output)
+	output := buf.String()
+	if !strings.Contains(output, "parallel1") || !strings.Contains(output, "parallel2") {
+		t.Errorf("Expected output to contain both 'parallel1' and 'parallel2', got '%s'", output)
 	}
 }
 
 func TestCommandHandler_ExecuteCommandWithSequentialCommands(t *testing.T) {
-	// Create a mock executor
-	mockExec := executor.NewMockExecutor()
-	
-	// Create a test config with sequential commands
+	// Use real executor with buffer for output-based tests
+	buf := &strings.Builder{}
+	realExec := executor.NewDefaultExecutor()
+	realExec.SetStdout(buf)
+	realExec.SetStderr(buf)
+
 	cfg := &config.ProjectConfig{
 		Name: "test-project",
 		Commands: map[string]config.Command{
@@ -260,28 +228,25 @@ func TestCommandHandler_ExecuteCommandWithSequentialCommands(t *testing.T) {
 		},
 	}
 
-	// Add command results
-	mockExec.AddCommandResult("echo 'seq1'", "seq1", nil)
-	mockExec.AddCommandResult("echo 'seq2'", "seq2", nil)
+	handler := NewCommandHandler(cfg, realExec)
 
-	// Create a command handler
-	handler := NewCommandHandler(cfg, mockExec)
-
-	// Test executing a command with sequential subcommands
 	err := handler.ExecuteCommand("sequential-parent", nil)
 	if err != nil {
 		t.Errorf("ExecuteCommand() with sequential commands error = %v", err)
 	}
-
+	output := buf.String()
+	if !strings.Contains(output, "seq1") || !strings.Contains(output, "seq2") {
+		t.Errorf("Expected output to contain both 'seq1' and 'seq2', got '%s'", output)
+	}
 	// Verify both commands were executed in order
-	output := mockExec.GetOutput()
+	output = buf.String()
 	// The mock executor duplicates output, so we check for the presence of both commands
 	if !strings.Contains(output, "seq1") || !strings.Contains(output, "seq2") {
 		t.Errorf("Expected output to contain 'seq1' and 'seq2', got '%s'", output)
 	}
 
 	// Test with a command that fails
-	mockExec.ClearOutput()
+	buf.Reset()
 	// Create a new config with a failing command
 	cfg = &config.ProjectConfig{
 		Name: "test-project",
@@ -295,12 +260,11 @@ func TestCommandHandler_ExecuteCommandWithSequentialCommands(t *testing.T) {
 		},
 	}
 
-	// Add command results
-	mockExec.AddCommandResult("echo 'seq1'", "seq1", nil)
-	mockExec.AddCommandResult("failing-command", "", fmt.Errorf("command failed"))
-
-	// Create a command handler
-	handler = NewCommandHandler(cfg, mockExec)
+	// Use real executor and buffer for output
+	buf.Reset()
+	realExec.SetStdout(buf)
+	realExec.SetStderr(buf)
+	handler = NewCommandHandler(cfg, realExec)
 
 	// Test executing a command with a failing sequential subcommand
 	err = handler.ExecuteCommand("sequential-with-error", nil)
@@ -309,19 +273,12 @@ func TestCommandHandler_ExecuteCommandWithSequentialCommands(t *testing.T) {
 	}
 
 	// Verify first command was executed but second failed
-	executedCmds := mockExec.GetExecutedCommands()
-	seq1Found := false
-	for _, cmd := range executedCmds {
-		if strings.Contains(cmd, "seq1") {
-			seq1Found = true
-			break
-		}
-	}
-	if !seq1Found {
-		t.Errorf("Expected seq1 command to be executed, but it wasn't found in executed commands: %v", executedCmds)
+	output = buf.String()
+	if !strings.Contains(output, "seq1") {
+		t.Errorf("Expected output to contain 'seq1' before failure, got '%s'", output)
 	}
 
-	// Verify error message
+	// Optionally, check that the error message contains 'failed'
 	if err != nil && !strings.Contains(err.Error(), "failed") {
 		t.Errorf("Expected error to contain 'failed', got '%v'", err)
 	}
@@ -329,7 +286,7 @@ func TestCommandHandler_ExecuteCommandWithSequentialCommands(t *testing.T) {
 
 func TestCommandHandler_ExecuteCommandWithInvalidCommand(t *testing.T) {
 	// Create a mock executor
-	mockExec := executor.NewMockExecutor()
+	realExec := executor.NewDefaultExecutor()
 	
 	// Create a test config
 	cfg := &config.ProjectConfig{
@@ -338,7 +295,7 @@ func TestCommandHandler_ExecuteCommandWithInvalidCommand(t *testing.T) {
 	}
 
 	// Create a command handler
-	handler := NewCommandHandler(cfg, mockExec)
+	handler := NewCommandHandler(cfg, realExec)
 
 	// Test executing a non-existent command
 	err := handler.ExecuteCommand("non-existent", nil)
@@ -350,11 +307,11 @@ func TestCommandHandler_ExecuteCommandWithInvalidCommand(t *testing.T) {
 func TestCommandHandler_ExecuteCommandWithCircularDependencies(t *testing.T) {
 	// This test should not be needed since we validate circular dependencies
 	// at config load time, but we'll include it for completeness
-	
-	// Create a mock executor
-	mockExec := executor.NewMockExecutor()
-	
-	// Create a test config with circular dependencies
+	buf := &strings.Builder{}
+	realExec := executor.NewDefaultExecutor()
+	realExec.SetStdout(buf)
+	realExec.SetStderr(buf)
+
 	cfg := &config.ProjectConfig{
 		Name: "test-project",
 		Commands: map[string]config.Command{
@@ -371,19 +328,14 @@ func TestCommandHandler_ExecuteCommandWithCircularDependencies(t *testing.T) {
 		},
 	}
 
-	// Create a command handler
-	handler := NewCommandHandler(cfg, mockExec)
+	handler := NewCommandHandler(cfg, realExec)
 
-	// Test executing a command with circular dependencies
-	// This should not cause an infinite loop because we track executed commands
 	err := handler.ExecuteCommand("circular1", nil)
 	if err != nil {
 		// We expect this to succeed because we track executed commands
 		t.Errorf("ExecuteCommand() with circular deps error = %v", err)
 	}
-
-	// Verify at least one command was executed
-	output := mockExec.GetOutput()
+	output := buf.String()
 	if output == "" {
 		t.Errorf("Expected at least one command to execute, got empty output")
 	}

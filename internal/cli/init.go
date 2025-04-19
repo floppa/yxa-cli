@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/floppa/yxa-cli/internal/config"
+	"github.com/floppa/yxa-cli/internal/executor"
 )
 
 // InitializeConfig loads the project configuration and validates it
@@ -34,7 +35,7 @@ var InitializeApp = func() (*RootCommand, error) {
 	}
 
 	// Create a default executor
-	exec := NewDefaultExecutor()
+	exec := executor.NewDefaultExecutor()
 
 	// Create the root command
 	root := NewRootCommand(cfg, exec)

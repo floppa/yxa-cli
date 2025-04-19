@@ -2,7 +2,6 @@ package executor
 
 import (
 	"bytes"
-	"fmt"
 	"io"
 	"os"
 	"strings"
@@ -328,49 +327,3 @@ func TestExecuteWithTimeout(t *testing.T) {
 	}
 }
 
-func TestMockExecutor(t *testing.T) {
-	// Create a mock executor
-	m := NewMockExecutor()
-
-	// Add some command results
-	m.AddCommandResult("echo 'test'", "test output", nil)
-	m.AddCommandResult("failing command", "", fmt.Errorf("command failed"))
-
-	// Test successful command
-	err := m.Execute("echo 'test'", 0)
-	if err != nil {
-		t.Errorf("MockExecutor.Execute() error = %v, wantErr %v", err, false)
-	}
-	if !strings.Contains(m.GetOutput(), "test output") {
-		t.Errorf("MockExecutor.Execute() output = %q, want to contain %q", m.GetOutput(), "test output")
-	}
-
-	// Clear output
-	m.ClearOutput()
-
-	// Test failing command
-	err = m.Execute("failing command", 0)
-	if err == nil {
-		t.Error("MockExecutor.Execute() error = nil, wantErr true")
-	}
-
-	// Test command with output
-	output, err := m.ExecuteWithOutput("echo 'test'", 0)
-	if err != nil {
-		t.Errorf("MockExecutor.ExecuteWithOutput() error = %v, wantErr %v", err, false)
-	}
-	if output != "test output" {
-		t.Errorf("MockExecutor.ExecuteWithOutput() output = %q, want %q", output, "test output")
-	}
-
-	// Test echo command extraction
-	if extractEchoContent("echo 'Hello'") != "Hello" {
-		t.Errorf("extractEchoContent() failed to extract content")
-	}
-	if extractEchoContent("echo \"Hello\"") != "Hello" {
-		t.Errorf("extractEchoContent() failed to extract content with double quotes")
-	}
-	if extractEchoContent("echo Hello") != "Hello" {
-		t.Errorf("extractEchoContent() failed to extract unquoted content")
-	}
-}
