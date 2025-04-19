@@ -255,7 +255,7 @@ func TestCommandHandler_ExecuteCommandWithSequentialCommands(t *testing.T) {
 				Run:         "",
 				Description: "Parent with failing sequential command",
 				Parallel:    false,
-				Commands:    map[string]string{"seq1": "echo 'seq1'", "seq-fail": "failing-command"},
+				Commands:    map[string]string{"seq1": "echo 'seq1'", "seq-fail": "exit 1"},
 			},
 		},
 	}
