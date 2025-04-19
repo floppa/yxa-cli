@@ -20,7 +20,9 @@ jobs:
           cache: true
 
       - name: Run tests
-        run: go test -v ./...
+        run: |
+          go build -ldflags "-s -w -X main.version=build -X main.buildTime=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" -o yxa . 
+          go test -v ./...
 
   build:
     name: Build CLI
