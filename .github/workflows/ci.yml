@@ -21,7 +21,9 @@ jobs:
           cache: true
 
       - name: Run build
-        run: go build -ldflags "-s -w -X main.version=build -X main.buildTime=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" -o yxa
+        run: |
+          go build -ldflags "-s -w -X main.version=build -X main.buildTime=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" -o yxa . 
+          echo "$PWD" >> $GITHUB_PATH
 
       - name: Run tests
         run: go test -v -race ./...
