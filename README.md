@@ -4,9 +4,15 @@ Yxa is a simple CLI tool that loads a config file (yxa.yml) in the current direc
 
 Yxa is the word for Axe in Swedish. Let's chop some trees!
 
-[![Test Coverage](https://img.shields.io/badge/coverage-85.6%25-brightgreen.svg)]()
-[![Go Report Card](https://img.shields.io/badge/go%20report-A+-brightgreen.svg)]()
-[![License](https://img.shields.io/badge/license-MIT-blue.svg)]()
+[![GitHub release](https://img.shields.io/github/v/release/floppa/yxa-cli?include_prereleases)](https://github.com/floppa/yxa-cli/releases)
+[![CI](https://github.com/floppa/yxa-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/floppa/yxa-cli/actions/workflows/ci.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/floppa/yxa-cli)](https://goreportcard.com/report/github.com/floppa/yxa-cli)
+[![Test Coverage](https://img.shields.io/badge/coverage-86%25-brightgreen.svg)]()
+[![gosec](https://img.shields.io/badge/gosec-security-brightgreen)](https://github.com/securego/gosec)
+[![Go Version](https://img.shields.io/badge/go-1.24-blue.svg)](https://golang.org/dl/)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](https://github.com/floppa/yxa-cli/pulls)
+<!-- [![codecov](https://codecov.io/gh/floppa/yxa-cli/branch/main/graph/badge.svg)](https://codecov.io/gh/floppa/yxa-cli) -->
 
 ## Installation
 
