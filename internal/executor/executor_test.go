@@ -15,7 +15,7 @@ import (
 func TestNewDefaultExecutor(t *testing.T) {
 	// Test that the constructor creates an executor with stdout and stderr set to os.Stdout and os.Stderr
 	executor := NewDefaultExecutor()
-	
+
 	assert.Equal(t, os.Stdout, executor.GetStdout(), "Default stdout should be os.Stdout")
 	assert.Equal(t, os.Stderr, executor.GetStderr(), "Default stderr should be os.Stderr")
 }
@@ -23,27 +23,27 @@ func TestNewDefaultExecutor(t *testing.T) {
 func TestDefaultExecutor_GettersAndSetters(t *testing.T) {
 	// Create a default executor
 	executor := NewDefaultExecutor()
-	
+
 	// Test the default values
 	assert.Equal(t, os.Stdout, executor.GetStdout(), "Default stdout should be os.Stdout")
 	assert.Equal(t, os.Stderr, executor.GetStderr(), "Default stderr should be os.Stderr")
-	
+
 	// Create custom writers
 	customStdout := &bytes.Buffer{}
 	customStderr := &bytes.Buffer{}
-	
+
 	// Test SetStdout
 	executor.SetStdout(customStdout)
 	assert.Equal(t, customStdout, executor.GetStdout(), "Stdout should be set to custom writer")
-	
+
 	// Test SetStderr
 	executor.SetStderr(customStderr)
 	assert.Equal(t, customStderr, executor.GetStderr(), "Stderr should be set to custom writer")
-	
+
 	// Test concurrent access to ensure mutex works properly
 	wg := sync.WaitGroup{}
 	wg.Add(2)
-	
+
 	go func() {
 		defer wg.Done()
 		for i := 0; i < 100; i++ {
@@ -51,7 +51,7 @@ func TestDefaultExecutor_GettersAndSetters(t *testing.T) {
 			_ = executor.GetStdout()
 		}
 	}()
-	
+
 	go func() {
 		defer wg.Done()
 		for i := 0; i < 100; i++ {
@@ -59,7 +59,7 @@ func TestDefaultExecutor_GettersAndSetters(t *testing.T) {
 			_ = executor.GetStderr()
 		}
 	}()
-	
+
 	wg.Wait()
 }
 
@@ -142,7 +142,7 @@ func TestDefaultExecutor_Execute(t *testing.T) {
 					t.Errorf("DefaultExecutor.Execute() output = %q, want %q", stdout.String(), tt.wantOutput)
 				}
 			}
-			
+
 			// Check stderr output for commands redirecting to stderr
 			if strings.Contains(tt.cmdStr, ">&2") && !tt.wantErr {
 				if !strings.Contains(stderr.String(), "Error message") {
@@ -221,7 +221,7 @@ func TestDefaultExecutor_ExecuteWithOutput(t *testing.T) {
 
 			// Check error
 			if (err != nil) != tt.wantErr {
-				t.Errorf("DefaultExecutor.ExecuteWithOutput() error = %v, wantErr %v, stderr: %s", 
+				t.Errorf("DefaultExecutor.ExecuteWithOutput() error = %v, wantErr %v, stderr: %s",
 					err, tt.wantErr, stderr.String())
 				return
 			}
@@ -326,4 +326,3 @@ func TestExecuteWithTimeout(t *testing.T) {
 		})
 	}
 }
-

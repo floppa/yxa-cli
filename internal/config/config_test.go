@@ -234,28 +234,28 @@ func TestProjectConfig_EvaluateConditionWithParams(t *testing.T) {
 
 func TestProcessParamDefinition(t *testing.T) {
 	tests := []struct {
-		name           string
-		paramDef       string
-		wantName       string
-		wantShorthand  string
+		name          string
+		paramDef      string
+		wantName      string
+		wantShorthand string
 	}{
 		{
-			name:           "name only",
-			paramDef:       "param",
-			wantName:       "param",
-			wantShorthand:  "",
+			name:          "name only",
+			paramDef:      "param",
+			wantName:      "param",
+			wantShorthand: "",
 		},
 		{
-			name:           "name with shorthand",
-			paramDef:       "param|p",
-			wantName:       "param",
-			wantShorthand:  "p",
+			name:          "name with shorthand",
+			paramDef:      "param|p",
+			wantName:      "param",
+			wantShorthand: "p",
 		},
 		{
-			name:           "empty string",
-			paramDef:       "",
-			wantName:       "",
-			wantShorthand:  "",
+			name:          "empty string",
+			paramDef:      "",
+			wantName:      "",
+			wantShorthand: "",
 		},
 	}
 

@@ -70,7 +70,7 @@ func NewDependencyConfigError(cmdName, depName, message string, err error) *Conf
 func NewCircularDependencyConfigError(path []string, cmdName string) *ConfigError {
 	// Create a readable path string showing the circular dependency
 	pathStr := strings.Join(path, " -> ") + " -> " + cmdName
-	
+
 	return &ConfigError{
 		Section: "command dependency",
 		Name:    cmdName,

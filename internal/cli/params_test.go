@@ -10,10 +10,10 @@ import (
 
 func TestProcessParamName(t *testing.T) {
 	tests := []struct {
-		name           string
-		paramName      string
-		expectedName   string
-		expectedShort  string
+		name          string
+		paramName     string
+		expectedName  string
+		expectedShort string
 	}{
 		{
 			name:          "simple name",
@@ -168,7 +168,7 @@ func TestAddParametersToCommand(t *testing.T) {
 	// that the flag exists and is registered correctly
 	requiredFlag := cmd.Flags().Lookup("required-param")
 	assert.NotNil(t, requiredFlag)
-	
+
 	// We can't directly check if it's required, but we can verify it was registered
 	assert.Equal(t, "", requiredFlag.DefValue)
 
@@ -267,7 +267,7 @@ func TestProcessParameters(t *testing.T) {
 	// Verify flag parameter values are present
 	assert.Equal(t, "flag-value", paramVars["string-param"])
 	assert.Equal(t, "100", paramVars["int-param"])
-	
+
 	// Positional parameters won't be set when args are missing
 	_, posParamPresent := paramVars["positional-param"]
 	assert.False(t, posParamPresent, "Positional parameter should not be set when no args provided")

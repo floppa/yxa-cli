@@ -10,10 +10,10 @@ import (
 
 // CommandHandler manages command execution with dependencies and variables
 type CommandHandler struct {
-	Config        *config.ProjectConfig
-	Executor      executor.CommandExecutor
-	executedCmds  map[string]bool
-	DryRun        bool
+	Config       *config.ProjectConfig
+	Executor     executor.CommandExecutor
+	executedCmds map[string]bool
+	DryRun       bool
 }
 
 // SetDryRun sets the dry-run mode for the handler
@@ -36,7 +36,7 @@ func (h *CommandHandler) ExecuteCommand(cmdName string, cmdVars map[string]strin
 	if h.executedCmds[cmdName] {
 		return nil
 	}
-	
+
 	// Mark the command as executed
 	h.executedCmds[cmdName] = true
 
@@ -45,12 +45,12 @@ func (h *CommandHandler) ExecuteCommand(cmdName string, cmdVars map[string]strin
 	if !ok {
 		return fmt.Errorf("command '%s' not found", cmdName)
 	}
-	
+
 	// Execute the command with proper error handling
 	if err := h.executeCommandWithDependencies(cmdName, cmd, cmdVars); err != nil {
 		return err
 	}
-	
+
 	return nil
 }
 
@@ -84,13 +84,13 @@ func (h *CommandHandler) checkCommandCondition(cmdName string, cmd config.Comman
 	if cmd.Condition == "" {
 		return nil
 	}
-	
+
 	// Evaluate the condition with parameter variables
 	if !h.Config.EvaluateConditionWithParams(cmd.Condition, cmdVars) {
 		fmt.Printf("Skipping command '%s' (condition not met: %s)\n", cmdName, cmd.Condition)
 		return nil
 	}
-	
+
 	return nil
 }
 
@@ -188,12 +188,12 @@ func (h *CommandHandler) parseTimeout(cmdName, timeoutStr string) (time.Duration
 	if timeoutStr == "" {
 		return 0, nil
 	}
-	
+
 	timeout, err := time.ParseDuration(timeoutStr)
 	if err != nil {
 		return 0, fmt.Errorf("invalid timeout '%s' for command '%s': %w", timeoutStr, cmdName, err)
 	}
-	
+
 	fmt.Printf("Command '%s' will timeout after %s\n", cmdName, timeout)
 	return timeout, nil
 }

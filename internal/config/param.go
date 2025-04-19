@@ -19,13 +19,13 @@ func ProcessParamDefinition(paramDef string) (name, shorthand string) {
 			parts = []string{paramDef[:idx], paramDef[idx+1:]}
 		}
 	}
-	
+
 	name = parts[0]
-	
+
 	if len(parts) > 1 {
 		shorthand = parts[1]
 	}
-	
+
 	return name, shorthand
 }
 

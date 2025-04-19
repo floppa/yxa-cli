@@ -50,6 +50,6 @@ func run(args []string, out io.Writer) int {
 		fmt.Println(err)
 		return 1
 	}
-	
+
 	return 0
 }

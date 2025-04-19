@@ -11,7 +11,7 @@ import (
 func TestCommandHandler_ExecuteHook(t *testing.T) {
 	// Create a mock executor
 	realExec := executor.NewDefaultExecutor()
-	
+
 	// Create a test config
 	cfg := &config.ProjectConfig{
 		Name: "test-project",
@@ -48,7 +48,6 @@ func TestCommandHandler_ExecuteHook(t *testing.T) {
 		t.Errorf("Expected output to contain 'pre-hook', got '%s'", output)
 	}
 	buf.Reset()
-
 
 	buf.Reset()
 

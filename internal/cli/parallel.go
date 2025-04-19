@@ -34,7 +34,7 @@ func NewSafeWriter(writer io.Writer, prefix string) *SafeWriter {
 func (w *SafeWriter) Write(p []byte) (n int, err error) {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
-	
+
 	// Write to the buffer
 	return w.buffer.Write(p)
 }
@@ -47,27 +47,27 @@ func (w *SafeWriter) flushLocked() error {
 	if content == "" {
 		return nil
 	}
-	
+
 	// Reset the buffer
 	w.buffer.Reset()
-	
+
 	// Split the content by newlines
 	lines := strings.Split(content, "\n")
-	
+
 	// Process each line
 	for i, line := range lines {
 		// Skip the last empty line that results from a trailing newline
 		if i == len(lines)-1 && line == "" {
 			continue
 		}
-		
+
 		// Write the line with the prefix
 		_, err := fmt.Fprintf(w.writer, "%s%s\n", w.prefix, line)
 		if err != nil {
 			return err
 		}
 	}
-	
+
 	return nil
 }
 
@@ -75,7 +75,7 @@ func (w *SafeWriter) flushLocked() error {
 func (w *SafeWriter) Flush() error {
 	w.mutex.Lock()
 	defer w.mutex.Unlock()
-	
+
 	return w.flushLocked()
 }
 
@@ -84,7 +84,7 @@ func syncWrite(writer io.Writer, format string, args ...interface{}) {
 	// Use a mutex to protect access to the shared writer
 	outputMutex.Lock()
 	defer outputMutex.Unlock()
-	
+
 	// Write the formatted string to the writer
 	_, err := fmt.Fprintf(writer, format, args...)
 	if err != nil {
@@ -100,7 +100,7 @@ var outputMutex sync.Mutex
 func (h *CommandHandler) executeParallelCommands(cmdName string, cmd config.Command, timeout time.Duration) error {
 	var wg sync.WaitGroup
 	errChan := make(chan error, len(cmd.Commands))
-	
+
 	// We'll use a mutex to protect access to the shared output writer
 
 	// Create a context with timeout if specified
@@ -127,12 +127,12 @@ func (h *CommandHandler) executeParallelCommands(cmdName string, cmd config.Comm
 
 			// Create a dedicated buffer for each command
 			cmdOutputBuffer := &bytes.Buffer{}
-			
+
 			// Create a local executor with prefixed output
 			localExecutor := executor.NewDefaultExecutor()
 			localExecutor.SetStdout(cmdOutputBuffer)
 			localExecutor.SetStderr(cmdOutputBuffer)
-			
+
 			// Use the syncWrite helper for thread-safe output
 			syncWrite(h.Executor.GetStdout(), "[%s] Starting execution...\n", name)
 
@@ -141,15 +141,15 @@ func (h *CommandHandler) executeParallelCommands(cmdName string, cmd config.Comm
 			go func() {
 				// Execute the command and capture its output
 				_, err := localExecutor.ExecuteWithOutput(cmdStr, timeout)
-				
+
 				// Get the buffered output
 				output := cmdOutputBuffer.String()
-				
+
 				// Use the syncWrite helper for thread-safe output
 				if output != "" {
 					syncWrite(h.Executor.GetStdout(), "[%s] %s\n", name, output)
 				}
-				
+
 				// Send the error (if any) to the done channel
 				done <- err
 			}()
@@ -161,7 +161,7 @@ func (h *CommandHandler) executeParallelCommands(cmdName string, cmd config.Comm
 					errChan <- fmt.Errorf("sub-command '%s' for '%s' failed: %v", name, cmdName, err)
 				}
 			case <-ctx.Done():
-				
+
 				// Command timed out or context was canceled
 				errChan <- fmt.Errorf("sub-command '%s' for '%s' timed out after %s", name, cmdName, timeout)
 			}
@@ -171,9 +171,9 @@ func (h *CommandHandler) executeParallelCommands(cmdName string, cmd config.Comm
 	// Wait for all commands to finish
 	wg.Wait()
 	close(errChan)
-	
+
 	// No need for any final output handling
-	
+
 	// Collect errors
 	var errors []string
 	for err := range errChan {

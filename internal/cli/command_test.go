@@ -32,9 +32,9 @@ func TestCommandHandler_ExecuteCommand(t *testing.T) {
 				Description: "Dependent command",
 			},
 			"with-deps": {
-				Run:          "echo 'with dependencies'",
-				Description:  "Command with dependencies",
-				Depends:      []string{"test", "dependent"},
+				Run:         "echo 'with dependencies'",
+				Description: "Command with dependencies",
+				Depends:     []string{"test", "dependent"},
 			},
 			"with-condition": {
 				Run:         "echo 'conditional command'",
@@ -287,7 +287,7 @@ func TestCommandHandler_ExecuteCommandWithSequentialCommands(t *testing.T) {
 func TestCommandHandler_ExecuteCommandWithInvalidCommand(t *testing.T) {
 	// Create a mock executor
 	realExec := executor.NewDefaultExecutor()
-	
+
 	// Create a test config
 	cfg := &config.ProjectConfig{
 		Name:     "test-project",
@@ -316,14 +316,14 @@ func TestCommandHandler_ExecuteCommandWithCircularDependencies(t *testing.T) {
 		Name: "test-project",
 		Commands: map[string]config.Command{
 			"circular1": {
-				Run:          "echo 'circular1'",
-				Description:  "First circular command",
-				Depends:      []string{"circular2"},
+				Run:         "echo 'circular1'",
+				Description: "First circular command",
+				Depends:     []string{"circular2"},
 			},
 			"circular2": {
-				Run:          "echo 'circular2'",
-				Description:  "Second circular command",
-				Depends:      []string{"circular1"},
+				Run:         "echo 'circular2'",
+				Description: "Second circular command",
+				Depends:     []string{"circular1"},
 			},
 		},
 	}
@@ -346,12 +346,12 @@ func parseTimeout(timeoutStr string) (time.Duration, error) {
 	if timeoutStr == "" {
 		return 0, nil
 	}
-	
+
 	timeout, err := time.ParseDuration(timeoutStr)
 	if err != nil {
 		return 0, fmt.Errorf("invalid timeout '%s': %w", timeoutStr, err)
 	}
-	
+
 	return timeout, nil
 }
 

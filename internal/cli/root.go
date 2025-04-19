@@ -33,9 +33,9 @@ func NewRootCommand(cfg *config.ProjectConfig, exec executor.CommandExecutor) *R
 		Short: "the morakniv of cli´s",
 		Long:  `yxa is a CLI tool that is defined by a config file - yxa.yml`,
 		CompletionOptions: cobra.CompletionOptions{
-			DisableDefaultCmd:     false,
-			DisableNoDescFlag:     false,
-			DisableDescriptions:   false,
+			DisableDefaultCmd:   false,
+			DisableNoDescFlag:   false,
+			DisableDescriptions: false,
 		},
 	}
 
@@ -182,7 +182,7 @@ PowerShell:
 
 // Global mutexes for synchronizing output to writers
 var (
-	writerMutexes = make(map[interface{}]*sync.Mutex)
+	writerMutexes   = make(map[interface{}]*sync.Mutex)
 	writerMutexLock sync.Mutex
 )
 
@@ -190,11 +190,11 @@ var (
 func getWriterMutex(writer interface{}) *sync.Mutex {
 	writerMutexLock.Lock()
 	defer writerMutexLock.Unlock()
-	
+
 	if mutex, ok := writerMutexes[writer]; ok {
 		return mutex
 	}
-	
+
 	mutex := &sync.Mutex{}
 	writerMutexes[writer] = mutex
 	return mutex

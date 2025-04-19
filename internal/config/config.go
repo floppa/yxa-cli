@@ -18,15 +18,15 @@ type ProjectConfig struct {
 	Variables map[string]string  `yaml:"variables,omitempty"`
 	Commands  map[string]Command `yaml:"commands"`
 	// Internal field to store environment variables (not from YAML)
-	envVars   map[string]string
+	envVars map[string]string
 }
 
 // Command represents a command defined in the project.yml file
 type Command struct {
-	Run         string            `yaml:"run"`                    // Main command to execute
-	Commands    map[string]string `yaml:"commands,omitempty"`     // Multiple commands for parallel execution
-	Depends     []string          `yaml:"depends,omitempty"`      // Dependencies to execute first
-	Description string            `yaml:"description,omitempty"`  // Command description
+	Run         string            `yaml:"run"`                   // Main command to execute
+	Commands    map[string]string `yaml:"commands,omitempty"`    // Multiple commands for parallel execution
+	Depends     []string          `yaml:"depends,omitempty"`     // Dependencies to execute first
+	Description string            `yaml:"description,omitempty"` // Command description
 	Condition   string            `yaml:"condition,omitempty"`   // Condition to evaluate before running
 	Pre         string            `yaml:"pre,omitempty"`         // Command to run before the main command
 	Post        string            `yaml:"post,omitempty"`        // Command to run after the main command
@@ -39,7 +39,7 @@ type Command struct {
 func LoadConfig() (*ProjectConfig, error) {
 	// Find the yxa.yml file in the current directory
 	configPath := filepath.Join(".", "yxa.yml")
-	
+
 	// Check if the file exists
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
 		return nil, fmt.Errorf("yxa.yml not found in the current directory")
@@ -68,7 +68,7 @@ func LoadConfig() (*ProjectConfig, error) {
 		if err != nil {
 			return nil, fmt.Errorf("failed to read .env file: %w", err)
 		}
-		
+
 		// Store the environment variables
 		for key, value := range envVars {
 			config.envVars[key] = value
@@ -90,7 +90,7 @@ func (c *ProjectConfig) ReplaceVariables(input string) string {
 	resolver := variables.NewResolver().
 		WithConfigVars(c.Variables).
 		WithEnvFileVars(c.envVars)
-	
+
 	// Resolve variables in the input string
 	return resolver.Resolve(input)
 }
@@ -103,7 +103,7 @@ func (c *ProjectConfig) ReplaceVariablesWithParams(input string, paramVars map[s
 		WithParamVars(paramVars).
 		WithConfigVars(c.Variables).
 		WithEnvFileVars(c.envVars)
-	
+
 	// Resolve variables in the input string
 	return resolver.Resolve(input)
 }

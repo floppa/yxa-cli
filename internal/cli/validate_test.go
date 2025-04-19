@@ -116,32 +116,32 @@ func TestParallelCommands(t *testing.T) {
 	// This may be due to changes in how parallel commands are validated
 	// We'll revisit this in a future update
 	/*
-	// Create a test config with a missing parallel command
-	cfg = &config.ProjectConfig{
-		Name: "test-project",
-		Commands: map[string]config.Command{
-			"cmd1": {
-				Run: "echo 'cmd1'",
+		// Create a test config with a missing parallel command
+		cfg = &config.ProjectConfig{
+			Name: "test-project",
+			Commands: map[string]config.Command{
+				"cmd1": {
+					Run: "echo 'cmd1'",
+				},
+				"parallel": {
+					Description: "Parallel command",
+					Parallel:    true,
+					Commands:    map[string]string{"cmd1": "echo 'cmd1'", "missing": "echo 'missing'"},
+				},
 			},
-			"parallel": {
-				Description: "Parallel command",
-				Parallel:    true,
-				Commands:    map[string]string{"cmd1": "echo 'cmd1'", "missing": "echo 'missing'"},
-			},
-		},
-	}
+		}
 
-	// Validate the config
-	err = validateCommandDependencies(cfg)
+		// Validate the config
+		err = validateCommandDependencies(cfg)
 
-	// Check that an error was returned
-	if err == nil {
-		t.Error("Expected missing command error, got nil")
-	}
+		// Check that an error was returned
+		if err == nil {
+			t.Error("Expected missing command error, got nil")
+		}
 
-	// Check that the error message contains "not found"
-	if err != nil && !strings.Contains(err.Error(), "not found") {
-		t.Errorf("Expected 'not found' error, got: %v", err)
-	}
+		// Check that the error message contains "not found"
+		if err != nil && !strings.Contains(err.Error(), "not found") {
+			t.Errorf("Expected 'not found' error, got: %v", err)
+		}
 	*/
 }

@@ -26,7 +26,7 @@ var originalInitializeApp = InitializeApp
 func SetupMockInitializeApp() {
 	// Save original function
 	originalInitializeApp = InitializeApp
-	
+
 	// Replace with mock function
 	InitializeApp = func() (*RootCommand, error) {
 		if MockInitializeApp != nil {

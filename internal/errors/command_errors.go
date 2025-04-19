@@ -55,7 +55,7 @@ func NewDependencyError(cmdName, depName string, err error) *CommandError {
 func NewCircularDependencyError(path []string, cmdName string) *CommandError {
 	// Create a readable path string showing the circular dependency
 	pathStr := strings.Join(path, " -> ") + " -> " + cmdName
-	
+
 	return &CommandError{
 		CommandName: cmdName,
 		Message:     fmt.Sprintf("circular dependency detected: %s", pathStr),

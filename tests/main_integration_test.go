@@ -75,7 +75,7 @@ commands:
 		cmd := exec.Command(yxaBinary, "--help")
 		output, err := cmd.CombinedOutput()
 		assert.NoError(t, err, "Help command failed")
-		
+
 		outputStr := string(output)
 		assert.Contains(t, outputStr, "Available Commands", "Help should list available commands")
 		assert.Contains(t, outputStr, "hello", "Help should include hello command")
@@ -96,12 +96,12 @@ commands:
 		cmd := exec.Command(yxaBinary, "write-file")
 		output, err := cmd.CombinedOutput()
 		assert.NoError(t, err, "write-file command failed: %s", string(output))
-		
+
 		// Verify the output directory was created
 		outputDir := filepath.Join(tempDir, "output")
 		_, err = os.Stat(outputDir)
 		assert.NoError(t, err, "Output directory should be created")
-		
+
 		// Verify the output file was created
 		outputFile := filepath.Join(outputDir, "output.txt")
 		content, err := os.ReadFile(outputFile)
@@ -114,7 +114,7 @@ commands:
 		cmd := exec.Command(yxaBinary, "completion", "--help")
 		output, err := cmd.CombinedOutput()
 		assert.NoError(t, err, "Completion command failed")
-		
+
 		outputStr := string(output)
 		assert.Contains(t, outputStr, "completion", "Completion help should include information about the command")
 	})
@@ -131,7 +131,7 @@ commands:
 		cmd := exec.Command(yxaBinary, "help", "hello")
 		output, err := cmd.CombinedOutput()
 		assert.NoError(t, err, "Command help failed")
-		
+
 		outputStr := string(output)
 		assert.Contains(t, outputStr, "hello", "Command help should include command name")
 		assert.Contains(t, outputStr, "A simple greeting command", "Command help should include description")

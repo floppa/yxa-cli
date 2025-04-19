@@ -61,33 +61,33 @@ func TestSafeWriter(t *testing.T) {
 	t.Run("Concurrent Writing", func(t *testing.T) {
 		var buf bytes.Buffer
 		writer := NewSafeWriter(&buf, "[prefix] ")
-		
+
 		// Create a wait group to synchronize goroutines
 		var wg sync.WaitGroup
-		
+
 		// Number of concurrent writers
 		numWriters := 10
-		
+
 		// Launch multiple goroutines to write concurrently
 		for i := 0; i < numWriters; i++ {
 			wg.Add(1)
 			go func(id int) {
 				defer wg.Done()
-				
+
 				// Write data specific to this goroutine
 				data := fmt.Sprintf("data from goroutine %d", id)
 				_, err := writer.Write([]byte(data))
 				assert.NoError(t, err)
 			}(i)
 		}
-		
+
 		// Wait for all writers to complete
 		wg.Wait()
-		
+
 		// Flush the buffer
 		err := writer.Flush()
 		require.NoError(t, err)
-		
+
 		// Check that all data was written
 		output := buf.String()
 		for i := 0; i < numWriters; i++ {
@@ -103,7 +103,7 @@ func TestExecuteParallelCommands(t *testing.T) {
 	t.Run("Successful Parallel Execution", func(t *testing.T) {
 		// Create a mock executor
 		realExec := executor.NewDefaultExecutor()
-		
+
 		// Use a buffer for output
 		buf := &bytes.Buffer{}
 		realExec.SetStdout(buf)
@@ -144,7 +144,7 @@ func TestExecuteParallelCommands(t *testing.T) {
 		buf.Reset()
 
 	})
-	
+
 	t.Run("Parallel Execution With Errors", func(t *testing.T) {
 		// Use a buffer for output
 		realExec := executor.NewDefaultExecutor()
@@ -187,13 +187,13 @@ func TestExecuteParallelCommands(t *testing.T) {
 		buf.Reset()
 
 	})
-	
+
 	t.Run("Parallel Execution With Timeout", func(t *testing.T) {
 		// Skip this test in CI environments as it's timing-dependent
 		if testing.Short() {
 			t.Skip("Skipping timeout test in short mode")
 		}
-		
+
 		// Use a buffer for output
 		realExec := executor.NewDefaultExecutor()
 		buf := &bytes.Buffer{}
@@ -246,23 +246,23 @@ func TestSafeWriterIntegration(t *testing.T) {
 	if testing.Short() {
 		t.Skip("Skipping integration test in short mode")
 	}
-	
+
 	t.Run("SafeWriter With Real Commands", func(t *testing.T) {
 		// Create a buffer to capture output
 		var buf bytes.Buffer
-		
+
 		// Create a SafeWriter with a prefix
 		writer := NewSafeWriter(&buf, "[TEST] ")
-		
+
 		// Write some data
 		n, err := writer.Write([]byte("line1\nline2\nline3"))
 		require.NoError(t, err)
 		assert.Equal(t, 17, n)
-		
+
 		// Flush the buffer
 		err = writer.Flush()
 		require.NoError(t, err)
-		
+
 		// Check the output
 		expected := "[TEST] line1\n[TEST] line2\n[TEST] line3\n"
 		assert.Equal(t, expected, buf.String())
