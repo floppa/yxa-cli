@@ -16,6 +16,7 @@ type RootCommand struct {
 	Executor executor.CommandExecutor
 	Handler  *CommandHandler
 	RootCmd  *cobra.Command
+	DryRun   bool // global dry-run flag
 }
 
 // NewRootCommand creates a new root command
@@ -37,6 +38,9 @@ func NewRootCommand(cfg *config.ProjectConfig, exec executor.CommandExecutor) *R
 			DisableDescriptions:   false,
 		},
 	}
+
+	// Add persistent dry-run flag
+	root.RootCmd.PersistentFlags().BoolVarP(&root.DryRun, "dry-run", "d", false, "Show commands to be executed without running them")
 
 	// Register commands from configuration
 	root.registerCommands()
@@ -94,6 +98,9 @@ func (r *RootCommand) registerCommands() {
 						cmdVars[k] = v
 					}
 				}
+
+				// Set dry-run flag on the handler
+				r.Handler.SetDryRun(r.DryRun)
 
 				// Execute the command with variables
 				if err := r.Handler.ExecuteCommand(cmdName, cmdVars); err != nil {

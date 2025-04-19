@@ -13,6 +13,12 @@ type CommandHandler struct {
 	Config        *config.ProjectConfig
 	Executor      executor.CommandExecutor
 	executedCmds  map[string]bool
+	DryRun        bool
+}
+
+// SetDryRun sets the dry-run mode for the handler
+func (h *CommandHandler) SetDryRun(dryRun bool) {
+	h.DryRun = dryRun
 }
 
 // NewCommandHandler creates a new command handler
@@ -117,15 +123,33 @@ func (h *CommandHandler) executeCommandBody(cmdName string, cmd config.Command, 
 	if cmd.Run != "" {
 		// Replace variables in the command
 		cmdStr := h.replaceVariablesInString(cmd.Run, cmdVars)
+		if h.DryRun {
+			fmt.Printf("[dry-run] Would execute: %s\n", cmdStr)
+			return nil
+		}
 		if err := h.Executor.Execute(cmdStr, timeout); err != nil {
 			return fmt.Errorf("failed to execute command '%s': %w", cmdName, err)
 		}
 	} else if len(cmd.Commands) > 0 {
 		if cmd.Parallel {
+			if h.DryRun {
+				for _, subCmd := range cmd.Commands {
+					cmdStr := h.replaceVariablesInString(subCmd, cmdVars)
+					fmt.Printf("[dry-run] Would execute (parallel): %s\n", cmdStr)
+				}
+				return nil
+			}
 			if err := h.executeParallelCommands(cmdName, cmd, timeout); err != nil {
 				return fmt.Errorf("failed to execute parallel commands for '%s': %w", cmdName, err)
 			}
 		} else {
+			if h.DryRun {
+				for _, subCmd := range cmd.Commands {
+					cmdStr := h.replaceVariablesInString(subCmd, cmdVars)
+					fmt.Printf("[dry-run] Would execute (sequential): %s\n", cmdStr)
+				}
+				return nil
+			}
 			if err := h.executeSequentialCommands(cmdName, cmd, timeout); err != nil {
 				return fmt.Errorf("failed to execute sequential commands for '%s': %w", cmdName, err)
 			}
@@ -145,13 +169,17 @@ func (h *CommandHandler) executeHook(cmdName, hookType, hookCmd string, cmdVars 
 	if hookCmd == "" {
 		return nil
 	}
-	
+
 	fmt.Printf("Executing %s-hook for '%s'...\n", hookType, cmdName)
 	hookCmdStr := h.replaceVariablesInString(hookCmd, cmdVars)
+	if h.DryRun {
+		fmt.Printf("[dry-run] Would execute (%s-hook): %s\n", hookType, hookCmdStr)
+		return nil
+	}
 	if err := h.Executor.Execute(hookCmdStr, 0); err != nil {
 		return fmt.Errorf("failed to execute %s-hook for command '%s': %w", hookType, cmdName, err)
 	}
-	
+
 	return nil
 }
 
