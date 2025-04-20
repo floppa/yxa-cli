@@ -141,6 +141,7 @@ func (e *DefaultExecutor) Execute(cmdStr string, timeout time.Duration) error {
 	cmdExec := exec.Command("sh", "-c", cmdStr) // #nosec G204
 	cmdExec.Stdout = e.Stdout
 	cmdExec.Stderr = e.Stderr
+	cmdExec.Stdin = os.Stdin
 
 	// Unlock after setting up the command
 	e.mutex.Unlock()
@@ -172,6 +173,7 @@ func (e *DefaultExecutor) ExecuteWithOutput(cmdStr string, timeout time.Duration
 		// Set up a multi-writer to capture output and also write to the original writers
 		cmdExec.Stdout = io.MultiWriter(&stdoutBuffer, stdout)
 		cmdExec.Stderr = io.MultiWriter(&stderrBuffer, stderr)
+		cmdExec.Stdin = os.Stdin
 
 		// Run the command and wait for it to complete
 		err := cmdExec.Run()
@@ -191,6 +193,7 @@ func (e *DefaultExecutor) ExecuteWithOutput(cmdStr string, timeout time.Duration
 	// Set up a multi-writer to capture output and also write to the original writers
 	cmdExec.Stdout = io.MultiWriter(&stdoutBuffer, stdout)
 	cmdExec.Stderr = io.MultiWriter(&stderrBuffer, stderr)
+	cmdExec.Stdin = os.Stdin
 
 	// Run the command and wait for it to complete
 	err := cmdExec.Run()
