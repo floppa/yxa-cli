@@ -23,6 +23,10 @@ jobs:
         run: |
           go test -v -race ./...
 
+      - name: Run build for tests
+        run: |
+          go build -ldflags "-s -w -X main.version=test -X main.buildTime=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" -o yxa . 
+
       - name: Setup Bats and bats libs
         id: setup-bats
         uses: bats-core/bats-action@3.0.0
