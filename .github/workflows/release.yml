@@ -1,5 +1,10 @@
 name: Build and Release
 
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
 on:
   push:
     tags:
@@ -114,3 +119,4 @@ jobs:
   docs:
     uses: ./.github/workflows/docs.yml
     needs: [ release ]
+    perm
