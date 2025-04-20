@@ -41,11 +41,23 @@ func TestMergeConfigs(t *testing.T) {
 	}
 }
 
-func TestLoadConfigFrom_MergesGlobal(t *testing.T) {
+func assertVariable(t *testing.T, got, want, name string) {
+	t.Helper()
+	if got != want {
+		t.Errorf("Variable %s: got %q, want %q", name, got, want)
+	}
+}
+
+func assertCommand(t *testing.T, got Command, wantRun, name string) {
+	t.Helper()
+	if got.Run != wantRun {
+		t.Errorf("Command %s: got run %q, want %q", name, got.Run, wantRun)
+	}
+}
+
+func TestLoadConfigFrom_MergesGlobal_ProjectOverridesGlobal(t *testing.T) {
 	dir := t.TempDir()
-	globalPath := filepath.Join(dir, ".yxa.yml")
-	projectPath := filepath.Join(dir, "yxa.yml")
-	if err := os.WriteFile(globalPath, []byte(`
+	globalConfig := `
 name: global
 variables:
   A: globalA
@@ -55,10 +67,8 @@ commands:
     run: echo global
   shared:
     run: echo global-shared
-`), 0644); err != nil {
-		t.Fatalf("Failed to write global config: %v", err)
-	}
-	if err := os.WriteFile(projectPath, []byte(`
+`
+	projectConfig := `
 name: project
 variables:
   B: projB
@@ -68,7 +78,13 @@ commands:
     run: echo project
   shared:
     run: echo project-shared
-`), 0644); err != nil {
+`
+	globalPath := filepath.Join(dir, ".yxa.yml")
+	projectPath := filepath.Join(dir, "yxa.yml")
+	if err := os.WriteFile(globalPath, []byte(globalConfig), 0644); err != nil {
+		t.Fatalf("Failed to write global config: %v", err)
+	}
+	if err := os.WriteFile(projectPath, []byte(projectConfig), 0644); err != nil {
 		t.Fatalf("Failed to write project config: %v", err)
 	}
 	oldHome := os.Getenv("HOME")
@@ -84,10 +100,13 @@ commands:
 	if cfg.Name != "project" {
 		t.Errorf("Name: got %v, want project", cfg.Name)
 	}
-	if cfg.Variables["A"] != "globalA" || cfg.Variables["B"] != "projB" || cfg.Variables["C"] != "projC" {
-		t.Errorf("Variables not merged: %+v", cfg.Variables)
-	}
-	if cfg.Commands["gcmd"].Run != "echo global" || cfg.Commands["pcmd"].Run != "echo project" || cfg.Commands["shared"].Run != "echo project-shared" {
-		t.Errorf("Commands not merged: %+v", cfg.Commands)
-	}
+	assertVariable(t, cfg.Variables["A"], "globalA", "A")
+	assertVariable(t, cfg.Variables["B"], "projB", "B")
+	assertVariable(t, cfg.Variables["C"], "projC", "C")
+	assertCommand(t, cfg.Commands["gcmd"], "echo global", "gcmd")
+	assertCommand(t, cfg.Commands["pcmd"], "echo project", "pcmd")
+	assertCommand(t, cfg.Commands["shared"], "echo project-shared", "shared")
+
 }
+
+

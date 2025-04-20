@@ -386,43 +386,47 @@ func assertConfigEnvVars(t *testing.T, cfg *ProjectConfig) {
 }
 
 func TestLoadConfig_FileNotFound(t *testing.T) {
-	// Create a temporary directory for the test
-	tmpDir, err := os.MkdirTemp("", "config-test-not-found")
-	if err != nil {
-		t.Fatalf("Failed to create temp dir: %v", err)
+	testCases := []struct {
+		name    string
+		setup   func(t *testing.T) (cleanup func())
+		assert  func(t *testing.T, err error)
+	}{
+		{
+			name: "no config file in temp dir",
+			setup: func(t *testing.T) func() {
+				tmpDir, err := os.MkdirTemp("", "config-test-not-found")
+				if err != nil {
+					t.Fatalf("Failed to create temp dir: %v", err)
+				}
+				currentDir, err := os.Getwd()
+				if err != nil {
+					t.Fatalf("Failed to get current directory: %v", err)
+				}
+				if err := os.Chdir(tmpDir); err != nil {
+					t.Fatalf("Failed to change directory: %v", err)
+				}
+				return func() {
+					_ = os.Chdir(currentDir)
+					_ = os.RemoveAll(tmpDir)
+				}
+			},
+			assert: func(t *testing.T, err error) {
+				if err == nil {
+					t.Errorf("LoadConfig() error = nil, want error")
+				}
+				if err != nil && !os.IsNotExist(err) && !strings.Contains(strings.ToLower(err.Error()), "not found") {
+					t.Errorf("LoadConfig() error = %v, want 'not found' error", err)
+				}
+			},
+		},
 	}
-	defer func() {
-		if err := os.RemoveAll(tmpDir); err != nil {
-			t.Logf("Warning: Failed to remove temporary directory: %v", err)
-		}
-	}()
 
-	// Save current directory
-	currentDir, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("Failed to get current directory: %v", err)
-	}
-
-	// Change to the temporary directory
-	if err := os.Chdir(tmpDir); err != nil {
-		t.Fatalf("Failed to change directory: %v", err)
-	}
-	defer func() {
-		if err := os.Chdir(currentDir); err != nil {
-			t.Logf("Warning: Failed to change back to original directory: %v", err)
-		}
-	}()
-
-	// Try to load the config (should fail)
-	_, err = LoadConfig()
-	if err == nil {
-		t.Errorf("LoadConfig() error = nil, want error")
-	}
-
-	if err != nil && !os.IsNotExist(err) {
-		// Check if the error message contains "not found"
-		if !os.IsNotExist(err) && !strings.Contains(strings.ToLower(err.Error()), "not found") {
-			t.Errorf("LoadConfig() error = %v, want 'not found' error", err)
-		}
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cleanup := tc.setup(t)
+			defer cleanup()
+			_, err := LoadConfig()
+			tc.assert(t, err)
+		})
 	}
 }

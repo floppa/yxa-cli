@@ -6,74 +6,135 @@ import (
 	"testing"
 )
 
-func TestResolveConfigPath(t *testing.T) {
+// Helper to isolate environment and HOME for each test
+func withIsolatedEnv(t *testing.T, testFunc func(home string)) {
 	t.Setenv("YXA_CONFIG", "")
 	t.Setenv("XDG_CONFIG_HOME", "")
-	home, _ := os.UserHomeDir()
-	_ = os.Remove(filepath.Join(home, ".yxa.yml"))
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	testFunc(home)
+}
 
-	// 1. Flag
-	flag := "/tmp/test-flag.yml"
-	if err := os.WriteFile(flag, []byte("test: flag"), 0644); err != nil {
-		t.Fatalf("Failed to write flag file: %v", err)
-	}
-	path, err := ResolveConfigPath(flag)
-	if err != nil || path != flag {
-		t.Errorf("flag: got %v, want %v, err=%v", path, flag, err)
-	}
-	_ = os.Remove(flag)
+func TestResolveConfigPath_Flag(t *testing.T) {
+	withIsolatedEnv(t, func(_ string) {
+		path := "/tmp/test-flag.yml"
+		if err := os.WriteFile(path, []byte("testflag"), 0644); err != nil {
+			t.Fatalf("failed to write flag config%v", err)
+		}
+		defer func() {
+			if err := os.Remove(path); err != nil {
+				t.Errorf("failed to remove flag config%v", err)
+			}
+		}()
+		got, err := ResolveConfigPath(path)
+		if err != nil {
+			t.Errorf("unexpected error%v", err)
+		}
+		if got != path {
+			t.Errorf("got %v, want %v", got, path)
+		}
+	})
+}
 
-	// 2. Env var
-	if err := os.WriteFile("/tmp/test-env.yml", []byte("test: env"), 0644); err != nil {
-		t.Fatalf("Failed to write /tmp/test-env.yml: %v", err)
-	}
-	t.Setenv("YXA_CONFIG", "/tmp/test-env.yml")
-	path, err = ResolveConfigPath("")
-	if err != nil || path != "/tmp/test-env.yml" {
-		t.Errorf("env: got %v, want %v, err=%v", path, "/tmp/test-env.yml", err)
-	}
-	_ = os.Remove("/tmp/test-env.yml")
-	t.Setenv("YXA_CONFIG", "")
+func TestResolveConfigPath_Env(t *testing.T) {
+	withIsolatedEnv(t, func(_ string) {
+		path := "/tmp/test-env.yml"
+		if err := os.WriteFile(path, []byte("testenv"), 0644); err != nil {
+			t.Fatalf("failed to write env config%v", err)
+		}
+		t.Setenv("YXA_CONFIG", path)
+		defer func() {
+			if err := os.Remove(path); err != nil {
+				t.Errorf("failed to remove env config%v", err)
+			}
+		}()
+		got, err := ResolveConfigPath("")
+		if err != nil {
+			t.Errorf("unexpected error%v", err)
+		}
+		if got != path {
+			t.Errorf("got %v, want %v", got, path)
+		}
+	})
+}
 
-	// 3. Local
-	if err := os.WriteFile("yxa.yml", []byte("test: local"), 0644); err != nil {
-		t.Fatalf("Failed to write yxa.yml: %v", err)
-	}
-	path, err = ResolveConfigPath("")
-	if err != nil || path != "yxa.yml" {
-		t.Errorf("local: got %v, want yxa.yml, err=%v", path, err)
-	}
-	_ = os.Remove("yxa.yml")
+func TestResolveConfigPath_Local(t *testing.T) {
+	withIsolatedEnv(t, func(_ string) {
+		path := "yxa.yml"
+		if err := os.WriteFile(path, []byte("testlocal"), 0644); err != nil {
+			t.Fatalf("failed to write local config%v", err)
+		}
+		defer func() {
+			if err := os.Remove(path); err != nil {
+				t.Errorf("failed to remove local config%v", err)
+			}
+		}()
+		got, err := ResolveConfigPath("")
+		if err != nil {
+			t.Errorf("unexpected error%v", err)
+		}
+		if got != path {
+			t.Errorf("got %v, want %v", got, path)
+		}
+	})
+}
 
-	// 4. XDG
-	t.Setenv("XDG_CONFIG_HOME", "/tmp")
-	if err := os.MkdirAll("/tmp/yxa", 0755); err != nil {
-		t.Fatalf("Failed to mkdir /tmp/yxa: %v", err)
-	}
-	if err := os.WriteFile("/tmp/yxa/config.yml", []byte("test: xdg"), 0644); err != nil {
-		t.Fatalf("Failed to write /tmp/yxa/config.yml: %v", err)
-	}
-	path, err = ResolveConfigPath("")
-	if err != nil || path != "/tmp/yxa/config.yml" {
-		t.Errorf("xdg: got %v, want /tmp/yxa/config.yml, err=%v", path, err)
-	}
-	_ = os.Remove("/tmp/yxa/config.yml")
-	_ = os.RemoveAll("/tmp/yxa")
-	t.Setenv("XDG_CONFIG_HOME", "")
+func TestResolveConfigPath_XDG(t *testing.T) {
+	withIsolatedEnv(t, func(_ string) {
+		xdg := "/tmp"
+		t.Setenv("XDG_CONFIG_HOME", xdg)
+		dir := filepath.Join(xdg, "yxa")
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			t.Fatalf("failed to mkdir %s%v", dir, err)
+		}
+		cfgPath := filepath.Join(dir, "config.yml")
+		if err := os.WriteFile(cfgPath, []byte("testxdg"), 0644); err != nil {
+			t.Fatalf("failed to write xdg config%v", err)
+		}
+		defer func() {
+			if err := os.Remove(cfgPath); err != nil {
+				t.Errorf("failed to remove xdg config%v", err)
+			}
+			if err := os.RemoveAll(dir); err != nil {
+				t.Errorf("failed to remove %s%v", dir, err)
+			}
+		}()
+		got, err := ResolveConfigPath("")
+		if err != nil {
+			t.Errorf("unexpected error%v", err)
+		}
+		if got != cfgPath {
+			t.Errorf("got %v, want %v", got, cfgPath)
+		}
+	})
+}
 
-	// 5. Home
-	if err := os.WriteFile(filepath.Join(home, ".yxa.yml"), []byte("test: home"), 0644); err != nil {
-		t.Fatalf("Failed to write home yxa.yml: %v", err)
-	}
-	path, err = ResolveConfigPath("")
-	if err != nil || path != filepath.Join(home, ".yxa.yml") {
-		t.Errorf("home: got %v, want %v, err=%v", path, filepath.Join(home, ".yxa.yml"), err)
-	}
-	_ = os.Remove(filepath.Join(home, ".yxa.yml"))
+func TestResolveConfigPath_Home(t *testing.T) {
+	withIsolatedEnv(t, func(home string) {
+		cfgPath := filepath.Join(home, ".yxa.yml")
+		if err := os.WriteFile(cfgPath, []byte("testhome"), 0644); err != nil {
+			t.Fatalf("failed to write home config%v", err)
+		}
+		defer func() {
+			if err := os.Remove(cfgPath); err != nil {
+				t.Errorf("failed to remove home config%v", err)
+			}
+		}()
+		got, err := ResolveConfigPath("")
+		if err != nil {
+			t.Errorf("unexpected error%v", err)
+		}
+		if got != cfgPath {
+			t.Errorf("got %v, want %v", got, cfgPath)
+		}
+	})
+}
 
-	// 6. Not found
-	path, err = ResolveConfigPath("")
-	if err == nil {
-		t.Errorf("not found: expected error, got %v", path)
-	}
+func TestResolveConfigPath_NotFound(t *testing.T) {
+	withIsolatedEnv(t, func(_ string) {
+		_, err := ResolveConfigPath("")
+		if err == nil {
+			t.Errorf("expected error, got nil")
+		}
+	})
 }

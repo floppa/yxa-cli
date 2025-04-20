@@ -63,93 +63,76 @@ func TestDefaultExecutor_GettersAndSetters(t *testing.T) {
 	wg.Wait()
 }
 
-func TestDefaultExecutor_Execute(t *testing.T) {
-	tests := []struct {
-		name       string
-		cmdStr     string
-		timeout    time.Duration
-		wantErr    bool
-		wantOutput string
-	}{
-		{
-			name:       "echo command",
-			cmdStr:     "echo 'Hello, World!'",
-			timeout:    0,
-			wantErr:    false,
-			wantOutput: "Hello, World!\n",
-		},
-		{
-			name:       "command with error",
-			cmdStr:     "exit 1",
-			timeout:    0,
-			wantErr:    true,
-			wantOutput: "",
-		},
-		{
-			name:       "command with timeout",
-			cmdStr:     "sleep 2",
-			timeout:    50 * time.Millisecond,
-			wantErr:    true,
-			wantOutput: "",
-		},
-		{
-			name:       "invalid command",
-			cmdStr:     "command_that_does_not_exist",
-			timeout:    0,
-			wantErr:    true,
-			wantOutput: "",
-		},
-		{
-			name:       "command with stderr output",
-			cmdStr:     "echo 'Error message' >&2",
-			timeout:    0,
-			wantErr:    false,
-			wantOutput: "",
-		},
+func TestDefaultExecutor_Execute_Echo(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	e := &DefaultExecutor{
+		Stdout: &stdout,
+		Stderr: &stderr,
 	}
+	err := e.Execute("echo 'Hello, World!'", 0)
+	if err != nil {
+		t.Errorf("DefaultExecutor.Execute() error = %v, wantErr false", err)
+	}
+	if stdout.String() != "Hello, World!\n" {
+		t.Errorf("DefaultExecutor.Execute() output = %q, want %q", stdout.String(), "Hello, World!\n")
+	}
+}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			// Create a buffer to capture output
-			var stdout bytes.Buffer
-			var stderr bytes.Buffer
+func TestDefaultExecutor_Execute_Error(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	e := &DefaultExecutor{
+		Stdout: &stdout,
+		Stderr: &stderr,
+	}
+	err := e.Execute("exit 1", 0)
+	if err == nil {
+		t.Errorf("DefaultExecutor.Execute() error = nil, wantErr true")
+	}
+}
 
-			// Create executor with buffers
-			e := &DefaultExecutor{
-				Stdout: &stdout,
-				Stderr: &stderr,
-			}
+func TestDefaultExecutor_Execute_Timeout(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	e := &DefaultExecutor{
+		Stdout: &stdout,
+		Stderr: &stderr,
+	}
+	err := e.Execute("sleep 2", 50*time.Millisecond)
+	if err == nil {
+		t.Errorf("Expected timeout error, got nil")
+	} else if !strings.Contains(err.Error(), "timed out") && !strings.Contains(err.Error(), "signal: killed") {
+		t.Errorf("Expected timeout error, got: %v", err)
+	}
+}
 
-			// Execute the command
-			err := e.Execute(tt.cmdStr, tt.timeout)
+func TestDefaultExecutor_Execute_InvalidCommand(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	e := &DefaultExecutor{
+		Stdout: &stdout,
+		Stderr: &stderr,
+	}
+	err := e.Execute("command_that_does_not_exist", 0)
+	if err == nil {
+		t.Errorf("DefaultExecutor.Execute() error = nil, wantErr true")
+	}
+}
 
-			// Check error
-			if (err != nil) != tt.wantErr {
-				t.Errorf("DefaultExecutor.Execute() error = %v, wantErr %v", err, tt.wantErr)
-				return
-			}
-
-			// For timeout errors, check the error message
-			if tt.timeout > 0 && err != nil {
-				if !strings.Contains(err.Error(), "timed out") && !strings.Contains(err.Error(), "signal: killed") {
-					t.Errorf("Expected timeout error, got: %v", err)
-				}
-			}
-
-			// Check output for echo commands
-			if strings.HasPrefix(tt.cmdStr, "echo") && !strings.Contains(tt.cmdStr, ">&2") && !tt.wantErr {
-				if stdout.String() != tt.wantOutput {
-					t.Errorf("DefaultExecutor.Execute() output = %q, want %q", stdout.String(), tt.wantOutput)
-				}
-			}
-
-			// Check stderr output for commands redirecting to stderr
-			if strings.Contains(tt.cmdStr, ">&2") && !tt.wantErr {
-				if !strings.Contains(stderr.String(), "Error message") {
-					t.Errorf("Expected stderr to contain 'Error message', got: %q", stderr.String())
-				}
-			}
-		})
+func TestDefaultExecutor_Execute_StderrOutput(t *testing.T) {
+	var stdout bytes.Buffer
+	var stderr bytes.Buffer
+	e := &DefaultExecutor{
+		Stdout: &stdout,
+		Stderr: &stderr,
+	}
+	err := e.Execute("echo 'Error message' >&2", 0)
+	if err != nil {
+		t.Errorf("DefaultExecutor.Execute() error = %v, wantErr false", err)
+	}
+	if !strings.Contains(stderr.String(), "Error message") {
+		t.Errorf("Expected stderr to contain 'Error message', got: %q", stderr.String())
 	}
 }
 
@@ -292,37 +275,40 @@ func TestExecuteWithTimeout(t *testing.T) {
 		},
 	}
 
+	checkError := func(t *testing.T, err error, wantErr bool, mode string) bool {
+		if (err != nil) != wantErr {
+			t.Errorf("%s() with timeout error = %v, wantErr %v", mode, err, wantErr)
+			return false
+		}
+		return true
+	}
+
+	checkTimeout := func(t *testing.T, wantErr bool, err error, mode string) {
+		if wantErr && err != nil {
+			if !strings.Contains(err.Error(), "timed out") && !strings.Contains(err.Error(), "signal: killed") {
+				t.Errorf("Expected timeout error in %s, got: %v", mode, err)
+			}
+		}
+	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			// Create executor
 			e := &DefaultExecutor{
 				Stdout: io.Discard,
 				Stderr: io.Discard,
 			}
 
-			// Test with Execute
 			err := e.Execute(tt.cmdStr, tt.timeout)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("Execute() with timeout error = %v, wantErr %v", err, tt.wantErr)
+			if !checkError(t, err, tt.wantErr, "Execute") {
+				return
 			}
+			checkTimeout(t, tt.wantErr, err, "Execute")
 
-			if tt.wantErr && err != nil {
-				if !strings.Contains(err.Error(), "timed out") && !strings.Contains(err.Error(), "signal: killed") {
-					t.Errorf("Expected timeout error, got: %v", err)
-				}
-			}
-
-			// Test with ExecuteWithOutput
 			_, err = e.ExecuteWithOutput(tt.cmdStr, tt.timeout)
-			if (err != nil) != tt.wantErr {
-				t.Errorf("ExecuteWithOutput() with timeout error = %v, wantErr %v", err, tt.wantErr)
+			if !checkError(t, err, tt.wantErr, "ExecuteWithOutput") {
+				return
 			}
-
-			if tt.wantErr && err != nil {
-				if !strings.Contains(err.Error(), "timed out") && !strings.Contains(err.Error(), "signal: killed") {
-					t.Errorf("Expected timeout error, got: %v", err)
-				}
-			}
+			checkTimeout(t, tt.wantErr, err, "ExecuteWithOutput")
 		})
 	}
 }
