@@ -1,4 +1,8 @@
-# yxa
+
+
+<img alt="golangci-lint logo" src="assets/yxa.svg" height="150" style="float:left;margin-right:20px;" />
+
+<h1 style="border:0;">yxa</h2> 
 
 Yxa is a simple CLI tool that loads a config file (yxa.yml) in the current directory and registers commands defined in it.
 
