@@ -21,6 +21,8 @@ type RootCommand struct {
 }
 
 // NewRootCommand creates a new root command
+var ConfigFlag string
+
 func NewRootCommand(cfg *config.ProjectConfig, exec executor.CommandExecutor) *RootCommand {
 	root := &RootCommand{
 		Config:   cfg,
@@ -40,6 +42,8 @@ func NewRootCommand(cfg *config.ProjectConfig, exec executor.CommandExecutor) *R
 		},
 	}
 
+	// Add persistent config flag
+	root.RootCmd.PersistentFlags().StringVar(&ConfigFlag, "config", "", "config file (default: yxa.yml in current directory, or global config)")
 	// Add persistent dry-run flag
 	root.RootCmd.PersistentFlags().BoolVarP(&root.DryRun, "dry-run", "d", false, "Show commands to be executed without running them")
 

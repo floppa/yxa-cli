@@ -9,7 +9,7 @@ Yxa is a simple CLI tool that loads a config file (yxa.yml) in the current direc
 Yxa is the word for Axe in Swedish. Let's chop some trees!
 
 [![GitHub release](https://img.shields.io/github/v/release/floppa/yxa-cli?include_prereleases)](https://github.com/floppa/yxa-cli/releases)
-[![CI](https://github.com/floppa/yxa-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/floppa/yxa-cli/actions/workflows/ci.yml)
+[![CI](https://github.com/floppa/yxa-cli/actions/workflows/ci.yml/badge.svg)](https://github.com/floppa/yxa-cli/actions/workflows/release.yml)
 [![Go Report Card](https://goreportcard.com/badge/github.com/floppa/yxa-cli)](https://goreportcard.com/report/github.com/floppa/yxa-cli)
 [![Test Coverage](https://img.shields.io/badge/coverage-86%25-brightgreen.svg)]()
 [![gosec](https://img.shields.io/badge/gosec-security-brightgreen)](https://github.com/securego/gosec)

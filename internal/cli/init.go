@@ -10,8 +10,13 @@ import (
 
 // InitializeConfig loads the project configuration and validates it
 func InitializeConfig() (*config.ProjectConfig, error) {
-	// Load the configuration
-	cfg, err := config.LoadConfig()
+	// Resolve config file path (flag, env, local, global)
+	path, err := config.ResolveConfigPath(ConfigFlag)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve config path: %w", err)
+	}
+
+	cfg, err := config.LoadConfigFrom(path)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load configuration: %w", err)
 	}

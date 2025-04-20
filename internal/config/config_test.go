@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"testing"
+	"strings"
 )
 
 func TestProjectConfig_ReplaceVariables(t *testing.T) {
@@ -420,7 +421,7 @@ func TestLoadConfig_FileNotFound(t *testing.T) {
 
 	if err != nil && !os.IsNotExist(err) {
 		// Check if the error message contains "not found"
-		if !os.IsNotExist(err) && err.Error() != "yxa.yml not found in the current directory" {
+		if !os.IsNotExist(err) && !strings.Contains(strings.ToLower(err.Error()), "not found") {
 			t.Errorf("LoadConfig() error = %v, want 'not found' error", err)
 		}
 	}

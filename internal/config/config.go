@@ -35,41 +35,75 @@ type Command struct {
 	Params      []Param           `yaml:"params,omitempty"`      // Command parameters (flags and positional)
 }
 
-// LoadConfig loads the project configuration from the yxa.yml file
+// LoadConfig loads the project configuration from the yxa.yml file (legacy, cwd)
 func LoadConfig() (*ProjectConfig, error) {
-	// Find the yxa.yml file in the current directory
-	configPath := filepath.Join(".", "yxa.yml")
+	return LoadConfigFrom(filepath.Join(".", "yxa.yml"))
+}
 
+// MergeConfigs merges global and project configs. Project config values take precedence.
+func MergeConfigs(global, project *ProjectConfig) *ProjectConfig {
+	if global == nil && project == nil {
+		return &ProjectConfig{}
+	}
+	if global == nil {
+		return project
+	}
+	if project == nil {
+		return global
+	}
+	merged := *global // shallow copy
+	if project.Name != "" {
+		merged.Name = project.Name
+	}
+	// Merge variables
+	merged.Variables = map[string]string{}
+	for k, v := range global.Variables {
+		merged.Variables[k] = v
+	}
+	for k, v := range project.Variables {
+		merged.Variables[k] = v
+	}
+	// Merge commands
+	merged.Commands = map[string]Command{}
+	for k, v := range global.Commands {
+		merged.Commands[k] = v
+	}
+	for k, v := range project.Commands {
+		merged.Commands[k] = v
+	}
+	return &merged
+}
+
+// LoadConfigFrom loads the project configuration from the specified file path, merging with global config if present.
+func LoadConfigFrom(configPath string) (*ProjectConfig, error) {
 	// Check if the file exists
 	if _, err := os.Stat(configPath); os.IsNotExist(err) {
-		return nil, fmt.Errorf("yxa.yml not found in the current directory")
+		return nil, fmt.Errorf("config file not found: %s", configPath)
 	}
 
 	// Read the file
 	// #nosec G304 -- This is intentional as reading the config file is the core functionality
 	data, err := os.ReadFile(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read yxa.yml: %w", err)
+		return nil, fmt.Errorf("failed to read config file: %w", err)
 	}
 
 	// Parse the YAML data
 	var config ProjectConfig
 	if err := yaml.Unmarshal(data, &config); err != nil {
-		return nil, fmt.Errorf("failed to parse yxa.yml: %w", err)
+		return nil, fmt.Errorf("failed to parse config file: %w", err)
 	}
 
 	// Initialize the environment variables map
 	config.envVars = make(map[string]string)
 
-	// Load environment variables from .env file if it exists
+	// Load environment variables from .env file if it exists (always relative to cwd)
 	envPath := filepath.Join(".", ".env")
 	if _, err := os.Stat(envPath); err == nil {
 		envVars, err := godotenv.Read(envPath)
 		if err != nil {
 			return nil, fmt.Errorf("failed to read .env file: %w", err)
 		}
-
-		// Store the environment variables
 		for key, value := range envVars {
 			config.envVars[key] = value
 		}
@@ -81,7 +115,39 @@ func LoadConfig() (*ProjectConfig, error) {
 		config.Commands[name] = cmd
 	}
 
+	// Try to load and merge global config if present
+	globalConfigPath, err := getGlobalConfigPath(configPath)
+	if err == nil {
+		globalConfig, err := LoadConfigFrom(globalConfigPath)
+		if err != nil {
+			return nil, fmt.Errorf("failed to load global config: %w", err)
+		}
+		config = *MergeConfigs(globalConfig, &config)
+	}
+
 	return &config, nil
+}
+
+// getGlobalConfigPath returns the path to the global config, or error if not found or not applicable.
+func getGlobalConfigPath(currentPath string) (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", err
+	}
+	globalCandidates := []string{}
+	if xdg := os.Getenv("XDG_CONFIG_HOME"); xdg != "" {
+		globalCandidates = append(globalCandidates, filepath.Join(xdg, "yxa", "config.yml"))
+	}
+	globalCandidates = append(globalCandidates, filepath.Join(home, ".yxa.yml"))
+	for _, p := range globalCandidates {
+		if p == currentPath {
+			continue
+		}
+		if _, err := os.Stat(p); err == nil {
+			return p, nil
+		}
+	}
+	return "", fmt.Errorf("no global config found")
 }
 
 // ReplaceVariables replaces variables in the given string with their values

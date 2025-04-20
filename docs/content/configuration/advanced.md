@@ -59,6 +59,67 @@ API_KEY=your-secret-key-here
 
 These variables can be used in your commands just like YAML variables:
 
+## Configuration File Precedence
+
+Yxa CLI supports multiple ways to specify which configuration file to use. The search order is:
+
+1. **`--config <path>` flag**: Specify a config file directly on the command line.
+2. **`YXA_CONFIG` environment variable**: Set this variable to the path of your config file.
+3. **`yxa.yml` in the current directory**: Default if no flag or env var is set.
+4. **`$XDG_CONFIG_HOME/yxa/config.yml`**: If XDG_CONFIG_HOME is set (Linux/macOS best practice).
+5. **`~/.yxa.yml`**: Fallback to a config file in your home directory.
+
+This allows you to define global, user, or project-specific configurations. The highest-precedence config found will be loaded. Example usage:
+
+```bash
+yxa --config /path/to/custom.yml build
+yxa build # uses yxa.yml in cwd, or global config if not present
+export YXA_CONFIG=~/work/myconfig.yml
+yxa test
+```
+
+### Merging Global and Project Configs
+
+If both a global config (e.g., `~/.yxa.yml` or `$XDG_CONFIG_HOME/yxa/config.yml`) and a project config are found, Yxa will **merge** them:
+
+- **Variables**: Project variables override global variables with the same name.
+- **Commands**: Project commands override global commands with the same name. Unique commands from both are included.
+- **Name**: Project config `name` takes precedence.
+
+This allows you to set global defaults or shared commands, and override/extend them in each project.
+
+#### Example
+
+_Global config (`~/.yxa.yml`):_
+```yaml
+name: global
+variables:
+  A: globalA
+  B: globalB
+commands:
+  gcmd:
+    run: echo global
+  shared:
+    run: echo global-shared
+```
+
+_Project config (`yxa.yml`):_
+```yaml
+name: project
+variables:
+  B: projB
+  C: projC
+commands:
+  pcmd:
+    run: echo project
+  shared:
+    run: echo project-shared
+```
+
+_Resulting config seen by Yxa:_
+- `name`: `project`
+- `variables`: `{A: globalA, B: projB, C: projC}`
+- `commands`: `gcmd`, `pcmd`, and `shared` (project version)
 
 ## Parameters
 
