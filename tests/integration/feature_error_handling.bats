@@ -11,7 +11,7 @@ teardown() {
   rm -rf "$TEST_DIR"
 }
 
-@test "Failing command returns error and outputs previous step" {
+@test "Failing command returns error and outputs error message" {
   cat > yxa.yml <<EOF
 name: yxa-test-project
 commands:
@@ -31,5 +31,5 @@ EOF
     echo "FAIL: CLI should have returned nonzero status for error" >&2
     exit 1
   fi
-  [[ "$output" == *"seq1"* ]]
+  [[ "$output" == *"Error executing command 'sequential-with-error'"* ]]
 }
