@@ -3,10 +3,7 @@ title: "Advanced Configuration"
 weight: 3
 ---
 
-## Advanced configuration
-
-
-### Variables
+## Variables
 
 The CLI supports four types of variables:
 
@@ -21,7 +18,7 @@ Variable resolution priority (highest to lowest):
 3. .env file variables
 4. System environment variables
 
-#### Example with Variables
+### Example with Variables
 
 ```yaml
 name: my-project
@@ -43,11 +40,11 @@ commands:
     description: Show GOPATH environment variable
 ```
 
-### .env File Support
+## .env File Support
 
 You can create a `.env` file in the project root to define environment variables that will be available to your commands. This is useful for storing sensitive information or environment-specific configuration.
 
-#### Example .env file
+### Example .env file
 
 ```bash
 # Build settings
@@ -63,7 +60,7 @@ API_KEY=your-secret-key-here
 These variables can be used in your commands just like YAML variables:
 
 
-### Parameters
+## Parameters
 
 Commands can accept parameters using `${PARAM}` syntax:
 
@@ -78,7 +75,7 @@ Run with:
 yxa echo --MESSAGE="Hello from param!"
 ```
 
-### Command chaining
+## Command chaining
 
 One of the powerful features of `yxa-cli` is command chaining, which allows you to define dependencies between commands. When you run a command, all its dependencies will be executed first, in the correct order.
 
@@ -96,7 +93,7 @@ commands:
 
 Running `yxa all` will execute `build` and then `test` in order.
 
-### Sequential subcommands
+## Sequential subcommands
 
 You can define subcommands that run in sequence:
 
@@ -115,7 +112,7 @@ commands:
     run: ./migrate.sh
 ```
 
-### Parallel subcommands
+## Parallel subcommands
 
 To run subcommands in parallel, use the `parallel` flag:
 
@@ -134,7 +131,7 @@ commands:
 
 This will run `test-unit` and `test-integration` at the same time. Parallel execution is thread-safe and handles timeouts gracefully.
 
-### Conditional Command Execution
+## Conditional Command Execution
 
 Commands can be configured to run only when certain conditions are met. This is useful for platform-specific commands or commands that should only run in certain environments.
 
@@ -162,7 +159,7 @@ Supported condition operators:
 - Contains: `contains` (e.g., `$PATH contains /usr/local`)
 - Exists: `exists` (e.g., `exists /path/to/file`)
 
-### Command Hooks
+## Command Hooks
 
 You can define pre and post hooks for commands. These are shell commands that run before and after the main command.
 
@@ -185,7 +182,7 @@ Hooks are useful for:
 - Notifications after command completion
 - Ensuring certain actions always happen around a command
 
-### Command Timeouts
+## Command Timeouts
 
 You can specify timeouts for commands to prevent them from running indefinitely. If a command exceeds its timeout, it will be terminated safely with proper cleanup.
 
@@ -206,5 +203,3 @@ Timeout values use Go's duration format:
 - `h` for hours (e.g., `1h`)
 
 The timeout implementation uses Go's context package for reliable cancellation and resource cleanup, ensuring that timed-out processes don't become orphaned.
-
-
