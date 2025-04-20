@@ -226,16 +226,64 @@ func TestProcessFlagParameter_Errors(t *testing.T) {
 }
 
 func TestValidateRequiredPositionalParameters_Errors(t *testing.T) {
-	posParams := map[int]config.Param{
-		0: {Name: "first", Required: true},
-		1: {Name: "second", Required: true},
+	tests := []struct {
+		name      string
+		posParams map[int]config.Param
+		args      []string
+		hasError  bool
+	}{
+		{
+			name: "all required present",
+			posParams: map[int]config.Param{
+				0: {Name: "first", Required: true},
+				1: {Name: "second", Required: true},
+			},
+			args:     []string{"v1", "v2"},
+			hasError: false,
+		},
+		{
+			name: "one required missing",
+			posParams: map[int]config.Param{
+				0: {Name: "first", Required: true},
+				1: {Name: "second", Required: true},
+			},
+			args:     []string{"v1"},
+			hasError: true,
+		},
+		{
+			name: "multiple required missing",
+			posParams: map[int]config.Param{
+				0: {Name: "first", Required: true},
+				1: {Name: "second", Required: true},
+				2: {Name: "third", Required: true},
+			},
+			args:     []string{},
+			hasError: true,
+		},
+		{
+			name: "no required",
+			posParams: map[int]config.Param{
+				0: {Name: "first", Required: false},
+				1: {Name: "second", Required: false},
+			},
+			args:     []string{},
+			hasError: false,
+		},
 	}
-	args := []string{"value1"} // Only one arg provided
-	err := validateRequiredPositionalParameters(posParams, args)
-	if err == nil {
-		t.Errorf("Should error if required positional param is missing")
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := validateRequiredPositionalParameters(tt.posParams, tt.args)
+			if tt.hasError && err == nil {
+				t.Errorf("Expected error but got nil")
+			}
+			if !tt.hasError && err != nil {
+				t.Errorf("Expected no error, got %v", err)
+			}
+		})
 	}
 }
+
 
 func TestProcessParameters(t *testing.T) {
 	// Create a test command

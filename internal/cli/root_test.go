@@ -100,18 +100,38 @@ func TestNewRootCommand_WithParams(t *testing.T) {
 }
 
 func TestGetWriterMutex_NewAndExisting(t *testing.T) {
-	w := &bytes.Buffer{}
-	mtx1 := getWriterMutex(w)
-	mtx2 := getWriterMutex(w)
-	if mtx1 != mtx2 {
-		t.Errorf("Expected same mutex for same writer")
+		b := &bytes.Buffer{}
+
+tests := []struct {
+		name      string
+		writer1   interface{}
+		writer2   interface{}
+		sameMutex bool
+	}{
+		{
+			name: "same writer",
+			writer1: b,
+			writer2: b,
+			sameMutex: true,
+		},
+		{"different writers", &bytes.Buffer{}, &bytes.Buffer{}, false},
+		{"nil writer", nil, nil, true},
 	}
-	w2 := &bytes.Buffer{}
-	mtx3 := getWriterMutex(w2)
-	if mtx1 == mtx3 {
-		t.Errorf("Expected different mutexes for different writers")
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mtx1 := getWriterMutex(tt.writer1)
+			mtx2 := getWriterMutex(tt.writer2)
+			if tt.sameMutex && mtx1 != mtx2 {
+				t.Errorf("Expected same mutex for same writer")
+			}
+			if !tt.sameMutex && mtx1 == mtx2 {
+				t.Errorf("Expected different mutexes for different writers")
+			}
+		})
 	}
 }
+
 
 func TestNewRootCommand(t *testing.T) {
 	// Create a simple test configuration
@@ -196,7 +216,6 @@ func TestNewRootCommand(t *testing.T) {
 }
 
 func TestRootCommand_Execute(t *testing.T) {
-	// Create a simple test configuration
 	cfg := &config.ProjectConfig{
 		Variables: map[string]string{
 			"PROJECT_NAME": "test-project",
@@ -208,83 +227,70 @@ func TestRootCommand_Execute(t *testing.T) {
 			},
 		},
 	}
+	tests := []struct {
+		name        string
+		args        []string
+		expectError bool
+		checkStdout func(t *testing.T, out string)
+		checkStderr func(t *testing.T, errOut string)
+	}{
+		{
+			name: "no args (help)",
+			args: []string{},
+			expectError: false,
+			checkStdout: func(t *testing.T, out string) {
+				assert.Contains(t, out, "Usage:")
+				assert.Contains(t, out, "Available Commands:")
+			},
+		},
+		{
+			name: "existing command",
+			args: []string{"test"},
+			expectError: false,
+			checkStdout: func(t *testing.T, out string) {
+				assert.Contains(t, out, "Test command")
+			},
+		},
+		{
+			name: "non-existent command",
+			args: []string{"non-existent"},
+			expectError: true,
+			checkStderr: func(t *testing.T, errOut string) {
+				assert.Contains(t, errOut, "unknown command")
+			},
+		},
+	}
 
-	// Create a mock executor
-	realExec := executor.NewDefaultExecutor()
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			stdout := &bytes.Buffer{}
+			stderr := &bytes.Buffer{}
+			realExec := executor.NewDefaultExecutor()
+			realExec.SetStdout(stdout)
+			realExec.SetStderr(stderr)
+			root := NewRootCommand(cfg, realExec)
+			root.RootCmd.SetOut(stdout)
+			root.RootCmd.SetErr(stderr)
+			root.RootCmd.SetArgs(tt.args)
 
-	// Create a root command
-	root := NewRootCommand(cfg, realExec)
-
-	// Test execution with no arguments (should show help)
-	t.Run("no args", func(t *testing.T) {
-		// Capture stdout
-		stdout := &bytes.Buffer{}
-		stderr := &bytes.Buffer{}
-		root.RootCmd.SetOut(stdout)
-		root.RootCmd.SetErr(stderr)
-
-		// Set args
-		root.RootCmd.SetArgs([]string{})
-
-		// Execute
-		err := root.Execute()
-		assert.NoError(t, err)
-
-		// Verify output contains help text
-		output := stdout.String()
-		assert.Contains(t, output, "Usage:")
-		assert.Contains(t, output, "Available Commands:")
-	})
-
-	// Test execution with an existing command
-	t.Run("existing command", func(t *testing.T) {
-		// Create a new mock executor for this test to avoid state from previous tests
-		realExec := executor.NewDefaultExecutor()
-		root := NewRootCommand(cfg, realExec)
-
-		// Capture stdout
-		stdout := &bytes.Buffer{}
-		stderr := &bytes.Buffer{}
-		root.RootCmd.SetOut(stdout)
-		root.RootCmd.SetErr(stderr)
-		realExec.SetStdout(stdout)
-		realExec.SetStderr(stderr)
-
-		// Set args
-		root.RootCmd.SetArgs([]string{"test"})
-
-		// Execute
-		err := root.Execute()
-		assert.NoError(t, err)
-
-		// Verify output
-		output := stdout.String()
-		assert.Contains(t, output, "Test command")
-
-		// Verify mock executor was called
-
-	})
-
-	// Test execution with a non-existent command
-	t.Run("non-existent command", func(t *testing.T) {
-		// Use real executor and buffer for output
-		stdout := &bytes.Buffer{}
-		stderr := &bytes.Buffer{}
-		realExec := executor.NewDefaultExecutor()
-		realExec.SetStdout(stdout)
-		realExec.SetStderr(stderr)
-		root := NewRootCommand(cfg, realExec)
-		root.RootCmd.SetOut(stdout)
-		root.RootCmd.SetErr(stderr)
-		root.RootCmd.SetArgs([]string{"non-existent"})
-		// Execute
-		err := root.Execute()
-		assert.Error(t, err)
-		// Verify error message
-		errOutput := stderr.String()
-		assert.Contains(t, errOutput, "unknown command")
-	})
+			err := root.Execute()
+			if tt.expectError {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+			}
+			if tt.checkStdout != nil {
+				out := stdout.String()
+				tt.checkStdout(t, out)
+			}
+			if tt.checkStderr != nil {
+				errOut := stderr.String()
+				tt.checkStderr(t, errOut)
+			}
+		})
+	}
 }
+
 
 func TestGetWriterMutex(t *testing.T) {
 	// Test getting a mutex for a writer
