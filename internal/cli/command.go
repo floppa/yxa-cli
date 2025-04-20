@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"sort"
 	"time"
 
 	"github.com/floppa/yxa-cli/internal/config"
@@ -237,23 +238,25 @@ func (h *CommandHandler) replaceVariablesInString(input string, vars map[string]
 
 // executeSequentialCommands executes multiple commands sequentially
 func (h *CommandHandler) executeSequentialCommands(cmdName string, cmd config.Command, timeout time.Duration) error {
-	for name, cmdStr := range cmd.Commands {
-		// Replace variables in the command
-		cmdStr = h.replaceVariablesInString(cmdStr, nil)
+	// Sort keys for deterministic execution order
+	keys := make([]string, 0, len(cmd.Commands))
+	for k := range cmd.Commands {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
+	for _, name := range keys {
+		cmdStr := h.replaceVariablesInString(cmd.Commands[name], nil)
 		fmt.Printf("Executing sequential sub-command '%s' for '%s'...\n", name, cmdName)
 
-		// Execute the command with timeout
 		err := h.Executor.Execute(cmdStr, timeout)
-		// Flush output after each subcommand (no-op for most writers, but ensures buffer is up to date)
 		if flusher, ok := h.Executor.GetStdout().(interface{ Flush() error }); ok {
 			_ = flusher.Flush()
 		}
 		if err != nil {
-			// Do NOT return early: allow output to be present in the buffer before returning error
 			return fmt.Errorf("sub-command '%s' for '%s' failed: %w", name, cmdName, err)
 		}
 	}
-
 	return nil
 }
 

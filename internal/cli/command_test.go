@@ -162,7 +162,102 @@ func TestCommandHandler_ExecuteCommandWithParams(t *testing.T) {
 	}
 }
 
-func TestCommandHandler_ExecuteCommandWithParallelCommands(t *testing.T) {
+func TestCommandHandler_ParallelAndSequentialEdgeCases(t *testing.T) {
+	t.Run("Parallel commands: one fails, should return error", func(t *testing.T) {
+		buf := &strings.Builder{}
+		realExec := executor.NewDefaultExecutor()
+		realExec.SetStdout(buf)
+		realExec.SetStderr(buf)
+
+		cfg := &config.ProjectConfig{
+			Name: "test-project",
+			Commands: map[string]config.Command{
+				"fail": {
+					Run:         "sh -c 'exit 1'",
+					Description: "Fails intentionally",
+				},
+				"ok": {
+					Run:         "echo 'ok'",
+					Description: "Succeeds",
+				},
+				"parallel-parent": {
+					Parallel: true,
+					Commands: map[string]string{"fail": "fail", "ok": "ok"},
+				},
+			},
+		}
+		handler := NewCommandHandler(cfg, realExec)
+		err := handler.ExecuteCommand("parallel-parent", nil)
+		if err == nil {
+			t.Errorf("Expected error from parallel with failure, got nil")
+		}
+	})
+
+	t.Run("Parallel commands: empty input returns error", func(t *testing.T) {
+		buf := &strings.Builder{}
+		realExec := executor.NewDefaultExecutor()
+		realExec.SetStdout(buf)
+		realExec.SetStderr(buf)
+		cfg := &config.ProjectConfig{
+			Name: "test-project",
+			Commands: map[string]config.Command{
+				"parallel-empty": {
+					Parallel: true,
+					Commands: map[string]string{},
+				},
+			},
+		}
+		handler := NewCommandHandler(cfg, realExec)
+		err := handler.ExecuteCommand("parallel-empty", nil)
+		if err == nil || !strings.Contains(err.Error(), "has no 'run' or 'commands' defined") {
+			t.Errorf("Expected error for empty parallel commands, got: %v", err)
+		}
+	})
+
+	t.Run("Sequential commands: one fails, should return error and stop", func(t *testing.T) {
+		buf := &strings.Builder{}
+		realExec := executor.NewDefaultExecutor()
+		realExec.SetStdout(buf)
+		realExec.SetStderr(buf)
+		cfg := &config.ProjectConfig{
+			Name: "test-project",
+			Commands: map[string]config.Command{
+				"fail": {Run: "sh -c 'exit 1'", Description: "Fails intentionally"},
+				"ok":   {Run: "echo 'ok'", Description: "Succeeds"},
+				"sequential-parent": {
+					Commands: map[string]string{"fail": "fail", "ok": "ok"},
+				},
+			},
+		}
+		handler := NewCommandHandler(cfg, realExec)
+		err := handler.ExecuteCommand("sequential-parent", nil)
+		if err == nil {
+			t.Errorf("Expected error from sequential with failure, got nil")
+		}
+	})
+
+	t.Run("Sequential commands: empty input returns error", func(t *testing.T) {
+		buf := &strings.Builder{}
+		realExec := executor.NewDefaultExecutor()
+		realExec.SetStdout(buf)
+		realExec.SetStderr(buf)
+		cfg := &config.ProjectConfig{
+			Name: "test-project",
+			Commands: map[string]config.Command{
+				"sequential-empty": {
+					Commands: map[string]string{},
+				},
+			},
+		}
+		handler := NewCommandHandler(cfg, realExec)
+		err := handler.ExecuteCommand("sequential-empty", nil)
+		if err == nil || !strings.Contains(err.Error(), "has no 'run' or 'commands' defined") {
+			t.Errorf("Expected error for empty sequential commands, got: %v", err)
+		}
+	})
+
+	// Existing test for parallel commands
+
 	// Use real executor with buffer for output-based tests
 	buf := &strings.Builder{}
 	realExec := executor.NewDefaultExecutor()
@@ -245,6 +340,211 @@ func TestCommandHandler_SequentialCommands_Success(t *testing.T) {
 	}
 }
 
+func TestCommandHandler_CheckCommandConditionAndTimeout(t *testing.T) {
+	cfg := &config.ProjectConfig{
+		Name: "test-project",
+		Variables: map[string]string{"FOO": "bar"},
+		Commands: map[string]config.Command{
+			"with-condition": {
+				Run:       "echo ok",
+				Condition: "$FOO == nope",
+			},
+			"with-invalid-condition": {
+				Run:       "echo fail",
+				Condition: "$FOO ==", // Invalid
+			},
+			"with-timeout": {
+				Run:     "echo timeout",
+				Timeout: "notaduration",
+			},
+		},
+	}
+	exec := executor.NewDefaultExecutor()
+	handler := NewCommandHandler(cfg, exec)
+
+	// Condition false: should be skipped, not an error
+	err := handler.ExecuteCommand("with-condition", nil)
+	if err != nil {
+		t.Errorf("Expected no error for unmet condition (should skip), got %v", err)
+	}
+
+	// Invalid condition: should be skipped, not an error
+	err = handler.ExecuteCommand("with-invalid-condition", nil)
+	if err != nil {
+		t.Errorf("Expected no error for invalid condition (should skip), got %v", err)
+	}
+
+	// Invalid timeout
+	_, err = handler.parseTimeout("with-timeout", "notaduration")
+	if err == nil {
+		t.Errorf("Expected error for invalid timeout, got nil")
+	}
+}
+
+func TestCommandHandler_ExecuteDependencies_Missing(t *testing.T) {
+	cfg := &config.ProjectConfig{
+		Name: "test-project",
+		Commands: map[string]config.Command{
+			"main": {
+				Run:     "echo main",
+				Depends: []string{"missing"},
+			},
+		},
+	}
+	exec := executor.NewDefaultExecutor()
+	handler := NewCommandHandler(cfg, exec)
+	err := handler.ExecuteCommand("main", nil)
+	if err == nil || !strings.Contains(err.Error(), "not found") {
+		t.Errorf("Expected error for missing dependency, got %v", err)
+	}
+}
+
+func TestCommandHandler_ExecuteCommand_ErrorCases(t *testing.T) {
+	cfg := &config.ProjectConfig{
+		Name: "test-project",
+		Commands: map[string]config.Command{
+			"missing-run": {}, // No Run or Commands
+			"invalid-param": {
+				Run: "echo 'should not run'",
+				Params: []config.Param{
+					{Name: "int-param", Type: "int", Default: "not-an-int", Flag: true},
+				},
+			},
+		},
+	}
+	exec := executor.NewDefaultExecutor()
+	buf := &strings.Builder{}
+	exec.SetStdout(buf)
+	exec.SetStderr(buf)
+	handler := NewCommandHandler(cfg, exec)
+
+	tests := []struct {
+		name      string
+		cmdName   string
+		expectErr bool
+	}{
+		{"missing run", "missing-run", true},
+		{"nonexistent command", "does-not-exist", true},
+		{"invalid param default", "invalid-param", false}, // Should not error at runtime, warning only
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			err := handler.ExecuteCommand(tt.cmdName, nil)
+			if tt.expectErr && err == nil {
+				t.Errorf("Expected error for %s, got nil", tt.name)
+			}
+		})
+	}
+}
+
+func TestCommandHandler_HookCases(t *testing.T) {
+	cfg := &config.ProjectConfig{
+		Name: "test-project",
+		Variables: map[string]string{"PARAM": "value"},
+		Commands: map[string]config.Command{
+			"hook-cmd": {
+				Pre:  "echo $PARAM",
+				Post: "",
+				Run:  "echo run",
+			},
+			"hook-fail": {
+				Pre:  "false",
+				Run:  "echo run",
+			},
+		},
+	}
+	exec := executor.NewDefaultExecutor()
+	buf := &strings.Builder{}
+	exec.SetStdout(buf)
+	exec.SetStderr(buf)
+	handler := NewCommandHandler(cfg, exec)
+
+	// Pre-hook with variable substitution
+	err := handler.executeHook("hook-cmd", "pre", "echo $PARAM", map[string]string{"PARAM": "test"})
+	if err != nil {
+		t.Errorf("Unexpected error for hook with variable: %v", err)
+	}
+
+	// Empty post-hook should not error
+	err = handler.executeHook("hook-cmd", "post", "", nil)
+	if err != nil {
+		t.Errorf("Unexpected error for empty post-hook: %v", err)
+	}
+
+	// Failing hook should error
+	err = handler.executeHook("hook-fail", "pre", "false", nil)
+	if err == nil {
+		t.Errorf("Expected error for failing hook, got nil")
+	}
+}
+
+func TestCommandHandler_VariableSubstitution_CircularAndMissing(t *testing.T) {
+	cfg := &config.ProjectConfig{
+		Name: "test-project",
+		Variables: map[string]string{
+			"FOO": "${BAR}",
+			"BAR": "${FOO}",
+		},
+		Commands: map[string]config.Command{
+			"circular": {Run: "echo $FOO"},
+			"missing":  {Run: "echo $BAZ"},
+		},
+	}
+	exec := executor.NewDefaultExecutor()
+	buf := &strings.Builder{}
+	exec.SetStdout(buf)
+	exec.SetStderr(buf)
+	handler := NewCommandHandler(cfg, exec)
+
+	// Circular reference should result in empty output (no error expected)
+	buf.Reset()
+	err := handler.ExecuteCommand("circular", nil)
+	if err != nil {
+		t.Errorf("Did not expect error for circular reference, got %v", err)
+	}
+	out := buf.String()
+	if out != "\n" {
+		t.Errorf("Expected output to be just a newline for circular reference, got '%s'", out)
+	}
+
+	// Missing variable should substitute as empty string and output a newline
+	buf.Reset()
+	err = handler.ExecuteCommand("missing", nil)
+	if err != nil {
+		t.Errorf("Unexpected error for missing variable: %v", err)
+	}
+	out = buf.String()
+	if out != "\n" {
+		t.Errorf("Expected output to be just a newline for missing variable, got '%s'", out)
+	}
+}
+
+func TestCommandHandler_SequentialCommands_Timeout(t *testing.T) {
+	buf := &strings.Builder{}
+	realExec := executor.NewDefaultExecutor()
+	realExec.SetStdout(buf)
+	realExec.SetStderr(buf)
+
+	cfg := &config.ProjectConfig{
+		Name: "test-project",
+		Commands: map[string]config.Command{
+			"sequential-timeout": {
+				Parallel: false,
+				Timeout:  "100ms",
+				Commands: map[string]string{
+					"slow": "sleep 1",
+				},
+			},
+		},
+	}
+	handler := NewCommandHandler(cfg, realExec)
+	err := handler.ExecuteCommand("sequential-timeout", nil)
+	if err == nil || !strings.Contains(err.Error(), "timed out") {
+		t.Errorf("Expected timeout error, got %v", err)
+	}
+}
+
 func TestCommandHandler_SequentialCommands_Failure(t *testing.T) {
 	buf := &strings.Builder{}
 	realExec := executor.NewDefaultExecutor()
@@ -258,7 +558,7 @@ func TestCommandHandler_SequentialCommands_Failure(t *testing.T) {
 				Run:         "",
 				Description: "Parent with failing sequential command",
 				Parallel:    false,
-				Commands:    map[string]string{"seq1": "echo 'seq1'", "seq-fail": "exit 1"},
+				Commands:    map[string]string{"seq1": "echo 'seq1'", "seq-fail": "echo 'fail'; exit 1"},
 			},
 		},
 	}
@@ -271,13 +571,13 @@ func TestCommandHandler_SequentialCommands_Failure(t *testing.T) {
 	}
 
 	output := buf.String()
-	if !strings.Contains(output, "seq1") {
-		t.Errorf("Expected output to contain 'seq1' before failure, got '%s'", output)
+	if !strings.Contains(output, "fail") {
+		t.Errorf("Expected output to contain 'fail' from failing command, got '%s'", output)
+	}
+	if err == nil || !strings.Contains(err.Error(), "seq-fail") {
+		t.Errorf("Expected error to contain 'seq-fail', got '%v'", err)
 	}
 
-	if err != nil && !strings.Contains(err.Error(), "failed") {
-		t.Errorf("Expected error to contain 'failed', got '%v'", err)
-	}
 }
 
 func TestCommandHandler_ExecuteCommandWithInvalidCommand(t *testing.T) {

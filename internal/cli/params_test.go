@@ -191,6 +191,52 @@ func TestAddParametersToCommand(t *testing.T) {
 	assert.Equal(t, "default", unknownTypeFlag)
 }
 
+func TestProcessFlagParameter_Errors(t *testing.T) {
+	cmd := &cobra.Command{
+		Use: "test",
+	}
+	param := config.Param{
+		Name:        "missing-int",
+		Type:        "int",
+		Description: "An int param that is not set",
+		Flag:        true,
+	}
+	// Do not register the flag
+	_, err := processFlagParameter(cmd, param)
+	if err == nil {
+		t.Errorf("Should error if flag is missing")
+	}
+
+	// Register as string, but expect int
+	cmd.Flags().String("wrong-type", "", "wrong type")
+	param.Name = "wrong-type"
+	param.Type = "int"
+	_, err = processFlagParameter(cmd, param)
+	if err == nil {
+		t.Errorf("Should error if flag type is wrong")
+	}
+
+	// Unknown type should default to string, but if not present should error
+	param.Name = "not-present"
+	param.Type = "unknown"
+	_, err = processFlagParameter(cmd, param)
+	if err == nil {
+		t.Errorf("Should error for unknown type if flag is missing")
+	}
+}
+
+func TestValidateRequiredPositionalParameters_Errors(t *testing.T) {
+	posParams := map[int]config.Param{
+		0: {Name: "first", Required: true},
+		1: {Name: "second", Required: true},
+	}
+	args := []string{"value1"} // Only one arg provided
+	err := validateRequiredPositionalParameters(posParams, args)
+	if err == nil {
+		t.Errorf("Should error if required positional param is missing")
+	}
+}
+
 func TestProcessParameters(t *testing.T) {
 	// Create a test command
 	cmd := &cobra.Command{

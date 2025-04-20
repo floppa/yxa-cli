@@ -10,6 +10,109 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func countUserCommands(cmd *cobra.Command) int {
+	count := 0
+	for _, c := range cmd.Commands() {
+		if c.Name() != "help" && c.Name() != "completion" {
+			count++
+		}
+	}
+	return count
+}
+
+func TestNewRootCommand_NilConfig(t *testing.T) {
+	root := NewRootCommand(nil, executor.NewDefaultExecutor())
+	if root == nil || root.RootCmd == nil {
+		t.Fatal("Expected RootCommand and RootCmd to be non-nil")
+	}
+	if countUserCommands(root.RootCmd) != 0 {
+		t.Errorf("Expected no user-defined commands, got %d", countUserCommands(root.RootCmd))
+	}
+}
+
+func TestNewRootCommand_EmptyCommands(t *testing.T) {
+	cfg := &config.ProjectConfig{Name: "empty", Commands: map[string]config.Command{}}
+	root := NewRootCommand(cfg, executor.NewDefaultExecutor())
+	if countUserCommands(root.RootCmd) != 0 {
+		t.Errorf("Expected no user-defined commands, got %d", countUserCommands(root.RootCmd))
+	}
+}
+
+func TestRootCommand_SetupCompletion(t *testing.T) {
+	cfg := &config.ProjectConfig{
+		Name: "test-project",
+		Commands: map[string]config.Command{},
+	}
+	root := NewRootCommand(cfg, executor.NewDefaultExecutor())
+
+	// Remove completion if already present (to test idempotency)
+	for _, cmd := range root.RootCmd.Commands() {
+		if cmd.Name() == "completion" {
+			root.RootCmd.RemoveCommand(cmd)
+		}
+	}
+	root.setupCompletion()
+
+	found := false
+	for _, cmd := range root.RootCmd.Commands() {
+		if cmd.Name() == "completion" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("Expected 'completion' command to be registered")
+	}
+}
+
+func TestNewRootCommand_WithParams(t *testing.T) {
+	cfg := &config.ProjectConfig{
+		Commands: map[string]config.Command{
+			"with-param": {
+				Run: "echo ok",
+				Params: []config.Param{
+					{
+						Name:        "flag",
+						Type:        "string",
+						Default:     "default",
+						Description: "A test flag",
+						Flag:        true,
+					},
+				},
+			},
+		},
+	}
+	root := NewRootCommand(cfg, executor.NewDefaultExecutor())
+	cmd, _, err := root.RootCmd.Find([]string{"with-param"})
+	if err != nil {
+		t.Fatalf("Find failed: %v", err)
+	}
+	if cmd == nil {
+		t.Fatal("Command not found")
+	}
+	flag := cmd.Flags().Lookup("flag")
+	if flag == nil {
+		t.Error("Expected flag 'flag' to be registered")
+	}
+	if flag.DefValue != "default" {
+		t.Errorf("Expected default value 'default', got '%s'", flag.DefValue)
+	}
+}
+
+func TestGetWriterMutex_NewAndExisting(t *testing.T) {
+	w := &bytes.Buffer{}
+	mtx1 := getWriterMutex(w)
+	mtx2 := getWriterMutex(w)
+	if mtx1 != mtx2 {
+		t.Errorf("Expected same mutex for same writer")
+	}
+	w2 := &bytes.Buffer{}
+	mtx3 := getWriterMutex(w2)
+	if mtx1 == mtx3 {
+		t.Errorf("Expected different mutexes for different writers")
+	}
+}
+
 func TestNewRootCommand(t *testing.T) {
 	// Create a simple test configuration
 	cfg := &config.ProjectConfig{

@@ -4,11 +4,12 @@ import (
 	"fmt"
 	"os"
 	"sync"
-
 	"github.com/floppa/yxa-cli/internal/config"
 	"github.com/floppa/yxa-cli/internal/executor"
 	"github.com/spf13/cobra"
 )
+
+var exitFunc = os.Exit
 
 // RootCommand manages the root command and its subcommands
 type RootCommand struct {
@@ -90,7 +91,7 @@ func (r *RootCommand) registerCommands() {
 					paramVars, err := processParameters(cmd, args, cmdConfig.Params)
 					if err != nil {
 						fmt.Printf("Error processing parameters: %v\n", err)
-						os.Exit(1)
+						exitFunc(1)
 					}
 
 					// Add parameter variables to the command variables
@@ -105,7 +106,7 @@ func (r *RootCommand) registerCommands() {
 				// Execute the command with variables
 				if err := r.Handler.ExecuteCommand(cmdName, cmdVars); err != nil {
 					fmt.Printf("Error executing command '%s': %v\n", cmdName, err)
-					os.Exit(1)
+					exitFunc(1)
 				}
 			},
 		}
@@ -172,7 +173,7 @@ PowerShell:
 			}
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Error generating completion: %v\n", err)
-				os.Exit(1)
+				exitFunc(1)
 			}
 		},
 	}

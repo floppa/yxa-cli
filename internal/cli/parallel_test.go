@@ -3,6 +3,7 @@ package cli
 import (
 	"bytes"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -97,6 +98,32 @@ func TestSafeWriter(t *testing.T) {
 }
 
 // We're using the MockExecutor from the executor package
+
+func TestExecuteParallelCommands_Timeout(t *testing.T) {
+	buf := &bytes.Buffer{}
+	exec := executor.NewDefaultExecutor()
+	exec.SetStdout(buf)
+	exec.SetStderr(buf)
+
+	cfg := &config.ProjectConfig{
+		Name: "test-project",
+		Commands: map[string]config.Command{
+			"parallel-timeout": {
+				Parallel: true,
+				Timeout:  "100ms",
+				Commands: map[string]string{
+					"slow1": "sleep 1",
+					"slow2": "sleep 1",
+				},
+			},
+		},
+	}
+	handler := NewCommandHandler(cfg, exec)
+	err := handler.ExecuteCommand("parallel-timeout", nil)
+	if err == nil || !strings.Contains(err.Error(), "timed out") {
+		t.Errorf("Expected timeout error, got %v", err)
+	}
+}
 
 // TestExecuteParallelCommands tests the parallel command execution functionality
 func TestExecuteParallelCommands(t *testing.T) {
