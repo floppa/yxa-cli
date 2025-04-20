@@ -19,10 +19,20 @@ jobs:
           go-version: '1.24'
           cache: true
 
-      - name: Run tests
+      - name: Run unit tests
         run: |
-          go build -ldflags "-s -w -X main.version=build -X main.buildTime=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" -o yxa . 
           go test -v -race ./...
+
+      - name: Setup Bats and bats libs
+        id: setup-bats
+        uses: bats-core/bats-action@3.0.0
+
+      - name: Run integration tests
+        shell: bash
+        env:
+          BATS_LIB_PATH: ${{ steps.setup-bats.outputs.lib-path }}
+          TERM: xterm
+        run: bats tests/integration
 
   build:
     name: Build CLI
