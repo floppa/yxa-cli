@@ -1,0 +1,47 @@
+baseURL: "https://floppa.github.io/yxa-cli/"
+languageCode: "sv-SE"
+title: "Yxa"
+theme: "hextra"
+
+params:
+  navbar:
+    displayTitle: true
+    displayLogo: true
+    logo:
+      path: images/yxa.svg
+      dark: images/yxa.svg
+      width: 30
+      height: 30
+      # link: /
+    width: wide
+  repo_url: "https://github.com/floppa/yxa-cli"
+  description: "Official documentation for the yxa-cli project."
+
+menu:
+  main:
+    - name: Getting started
+      url: /getting-started/
+      weight: 1
+    - name: Usage
+      url: /usage/
+      weight: 2
+    - name: Configuration
+      url: /configuration/
+      weight: 3
+    - name: Search
+      weight: 4
+      params:
+        type: search
+    - name: GitHub
+      weight: 5
+      url: "https://github.com/floppa/yxa-cli"
+      params:
+        icon: github
+
+footer:
+    enable: true
+    displayCopyright: true
+    displayPoweredBy: true
+    width: normal
+
+copyright: "© 2024 Magnus Eriksson"
