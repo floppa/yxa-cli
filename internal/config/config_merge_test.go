@@ -41,6 +41,7 @@ func TestMergeConfigs(t *testing.T) {
 	}
 }
 
+// assertVariable checks that a variable has the expected value.
 func assertVariable(t *testing.T, got, want, name string) {
 	t.Helper()
 	if got != want {
@@ -48,6 +49,7 @@ func assertVariable(t *testing.T, got, want, name string) {
 	}
 }
 
+// assertCommand checks that a command's Run field matches the expected value.
 func assertCommand(t *testing.T, got Command, wantRun, name string) {
 	t.Helper()
 	if got.Run != wantRun {
@@ -55,6 +57,7 @@ func assertCommand(t *testing.T, got Command, wantRun, name string) {
 	}
 }
 
+// TestLoadConfigFrom_MergesGlobal_ProjectOverridesGlobal verifies that project config correctly overrides global config values when merging.
 func TestLoadConfigFrom_MergesGlobal_ProjectOverridesGlobal(t *testing.T) {
 	dir := t.TempDir()
 	globalConfig := `
