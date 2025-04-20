@@ -28,6 +28,9 @@ menu:
     - name: Configuration
       url: /configuration/
       weight: 3
+    - name: Changelog
+      url: /changelog/
+      weight: 4
     - name: Search
       weight: 4
       params:
