@@ -113,3 +113,4 @@ jobs:
             Download the Windows executable from the assets below and add it to your PATH.
   docs:
     uses: ./.github/workflows/docs.yml
+    needs: [ release ]
