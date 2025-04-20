@@ -197,7 +197,6 @@ func validateRequiredPositionalParameters(posParams map[int]config.Param, args [
 	return nil
 }
 
-
 // processParamName extracts name and shorthand from the parameter name
 func processParamName(paramName string) (name, shorthand string) {
 	parts := []string{paramName}

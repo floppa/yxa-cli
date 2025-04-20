@@ -284,7 +284,6 @@ func TestValidateRequiredPositionalParameters_Errors(t *testing.T) {
 	}
 }
 
-
 func TestProcessParameters(t *testing.T) {
 	// Create a test command
 	cmd := &cobra.Command{

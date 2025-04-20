@@ -161,7 +161,6 @@ func TestCommandHandler_ExecuteCommandWithTimeout(t *testing.T) {
 	}
 }
 
-
 func TestCommandHandler_ExecuteCommandWithParams(t *testing.T) {
 	buf := &strings.Builder{}
 	realExec := executor.NewDefaultExecutor()
@@ -178,7 +177,7 @@ func TestCommandHandler_ExecuteCommandWithParams(t *testing.T) {
 		{
 			name: "parameter present",
 			cfg: &config.ProjectConfig{
-				Name: "test-project",
+				Name:      "test-project",
 				Variables: map[string]string{"DEFAULT_VALUE": "default"},
 				Commands: map[string]config.Command{
 					"with-params": {
@@ -194,7 +193,7 @@ func TestCommandHandler_ExecuteCommandWithParams(t *testing.T) {
 		{
 			name: "parameter missing, fallback to default",
 			cfg: &config.ProjectConfig{
-				Name: "test-project",
+				Name:      "test-project",
 				Variables: map[string]string{"DEFAULT_VALUE": "default"},
 				Commands: map[string]config.Command{
 					"with-params": {
@@ -242,7 +241,6 @@ func TestCommandHandler_ExecuteCommandWithParams(t *testing.T) {
 		})
 	}
 }
-
 
 func TestCommandHandler_ParallelAndSequentialEdgeCases(t *testing.T) {
 	t.Run("Parallel commands: one fails, should return error", func(t *testing.T) {
@@ -424,7 +422,7 @@ func TestCommandHandler_SequentialCommands_Success(t *testing.T) {
 
 func TestCommandHandler_CheckCommandConditionAndTimeout(t *testing.T) {
 	cfg := &config.ProjectConfig{
-		Name: "test-project",
+		Name:      "test-project",
 		Variables: map[string]string{"FOO": "bar"},
 		Commands: map[string]config.Command{
 			"with-condition": {
@@ -522,7 +520,7 @@ func TestCommandHandler_ExecuteCommand_ErrorCases(t *testing.T) {
 
 func TestCommandHandler_HookCases(t *testing.T) {
 	cfg := &config.ProjectConfig{
-		Name: "test-project",
+		Name:      "test-project",
 		Variables: map[string]string{"PARAM": "value"},
 		Commands: map[string]config.Command{
 			"hook-cmd": {
@@ -531,8 +529,8 @@ func TestCommandHandler_HookCases(t *testing.T) {
 				Run:  "echo run",
 			},
 			"hook-fail": {
-				Pre:  "false",
-				Run:  "echo run",
+				Pre: "false",
+				Run: "echo run",
 			},
 		},
 	}

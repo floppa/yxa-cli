@@ -195,7 +195,6 @@ func (h *CommandHandler) runPostHook(cmdName string, cmd config.Command, cmdVars
 	return h.executeHook(cmdName, "post", cmd.Post, cmdVars)
 }
 
-
 // executeHook executes a pre or post hook for a command
 func (h *CommandHandler) executeHook(cmdName, hookType, hookCmd string, cmdVars map[string]string) error {
 	if hookCmd == "" {

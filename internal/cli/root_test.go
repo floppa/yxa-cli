@@ -40,7 +40,7 @@ func TestNewRootCommand_EmptyCommands(t *testing.T) {
 
 func TestRootCommand_SetupCompletion(t *testing.T) {
 	cfg := &config.ProjectConfig{
-		Name: "test-project",
+		Name:     "test-project",
 		Commands: map[string]config.Command{},
 	}
 	root := NewRootCommand(cfg, executor.NewDefaultExecutor())
@@ -92,7 +92,7 @@ func TestNewRootCommand_WithParams(t *testing.T) {
 	}
 	flag := cmd.Flags().Lookup("flag")
 	if flag == nil {
-		t.Error("Expected flag 'flag' to be registered")
+		t.Fatalf("Expected flag 'flag' to be registered")
 	}
 	if flag.DefValue != "default" {
 		t.Errorf("Expected default value 'default', got '%s'", flag.DefValue)
@@ -100,18 +100,18 @@ func TestNewRootCommand_WithParams(t *testing.T) {
 }
 
 func TestGetWriterMutex_NewAndExisting(t *testing.T) {
-		b := &bytes.Buffer{}
+	b := &bytes.Buffer{}
 
-tests := []struct {
+	tests := []struct {
 		name      string
 		writer1   interface{}
 		writer2   interface{}
 		sameMutex bool
 	}{
 		{
-			name: "same writer",
-			writer1: b,
-			writer2: b,
+			name:      "same writer",
+			writer1:   b,
+			writer2:   b,
 			sameMutex: true,
 		},
 		{"different writers", &bytes.Buffer{}, &bytes.Buffer{}, false},
@@ -131,7 +131,6 @@ tests := []struct {
 		})
 	}
 }
-
 
 func TestNewRootCommand(t *testing.T) {
 	// Create a simple test configuration
@@ -235,8 +234,8 @@ func TestRootCommand_Execute(t *testing.T) {
 		checkStderr func(t *testing.T, errOut string)
 	}{
 		{
-			name: "no args (help)",
-			args: []string{},
+			name:        "no args (help)",
+			args:        []string{},
 			expectError: false,
 			checkStdout: func(t *testing.T, out string) {
 				assert.Contains(t, out, "Usage:")
@@ -244,16 +243,16 @@ func TestRootCommand_Execute(t *testing.T) {
 			},
 		},
 		{
-			name: "existing command",
-			args: []string{"test"},
+			name:        "existing command",
+			args:        []string{"test"},
 			expectError: false,
 			checkStdout: func(t *testing.T, out string) {
 				assert.Contains(t, out, "Test command")
 			},
 		},
 		{
-			name: "non-existent command",
-			args: []string{"non-existent"},
+			name:        "non-existent command",
+			args:        []string{"non-existent"},
 			expectError: true,
 			checkStderr: func(t *testing.T, errOut string) {
 				assert.Contains(t, errOut, "unknown command")
@@ -290,7 +289,6 @@ func TestRootCommand_Execute(t *testing.T) {
 		})
 	}
 }
-
 
 func TestGetWriterMutex(t *testing.T) {
 	// Test getting a mutex for a writer

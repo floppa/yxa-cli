@@ -2,11 +2,11 @@ package cli
 
 import (
 	"fmt"
-	"os"
-	"sync"
 	"github.com/floppa/yxa-cli/internal/config"
 	"github.com/floppa/yxa-cli/internal/executor"
 	"github.com/spf13/cobra"
+	"os"
+	"sync"
 )
 
 var exitFunc = os.Exit
