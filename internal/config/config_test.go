@@ -2,8 +2,8 @@ package config
 
 import (
 	"os"
-	"testing"
 	"strings"
+	"testing"
 )
 
 func TestProjectConfig_ReplaceVariables(t *testing.T) {
@@ -387,9 +387,9 @@ func assertConfigEnvVars(t *testing.T, cfg *ProjectConfig) {
 
 func TestLoadConfig_FileNotFound(t *testing.T) {
 	testCases := []struct {
-		name    string
-		setup   func(t *testing.T) (cleanup func())
-		assert  func(t *testing.T, err error)
+		name   string
+		setup  func(t *testing.T) (cleanup func())
+		assert func(t *testing.T, err error)
 	}{
 		{
 			name: "no config file in temp dir",

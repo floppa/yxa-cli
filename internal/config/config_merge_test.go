@@ -14,7 +14,7 @@ func TestMergeConfigs(t *testing.T) {
 			"B": "globalB",
 		},
 		Commands: map[string]Command{
-			"gcmd": {Run: "echo global"},
+			"gcmd":   {Run: "echo global"},
 			"shared": {Run: "echo global-shared"},
 		},
 	}
@@ -25,7 +25,7 @@ func TestMergeConfigs(t *testing.T) {
 			"C": "projC",
 		},
 		Commands: map[string]Command{
-			"pcmd": {Run: "echo project"},
+			"pcmd":   {Run: "echo project"},
 			"shared": {Run: "echo project-shared"},
 		},
 	}
@@ -111,5 +111,3 @@ commands:
 	assertCommand(t, cfg.Commands["shared"], "echo project-shared", "shared")
 
 }
-
-
