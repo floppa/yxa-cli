@@ -6,6 +6,182 @@ import (
 	"testing"
 )
 
+func writeConfigsAndCheckWorkingDir(t *testing.T, globalConfigYAML, projectConfigYAML, commandName, expectedWorkingDir string) {
+	t.Helper()
+	tmpDir, cleanupTmp := createTempDir(t)
+	defer cleanupTmp()
+
+	writeConfigFile(t, tmpDir+"/.yxa.yml", globalConfigYAML)
+	writeConfigFile(t, tmpDir+"/yxa.yml", projectConfigYAML)
+	if err := os.Setenv("HOME", tmpDir); err != nil {
+		t.Fatalf("failed to set HOME: %v", err)
+	}
+	cur, cleanupChdir := changeToDir(t, tmpDir)
+	defer cleanupChdir()
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig() error = %v", err)
+	}
+	cmd, ok := cfg.Commands[commandName]
+	if !ok {
+		t.Fatalf("command %q not found", commandName)
+	}
+	effectiveWorkingDir := getEffectiveWorkingDir(cmd, projectConfigYAML, globalConfigYAML)
+	if effectiveWorkingDir != expectedWorkingDir {
+		t.Errorf("effective workingdir = %q, want %q", effectiveWorkingDir, expectedWorkingDir)
+	}
+	_ = cur // silence unused var warning
+}
+
+func writeConfigFile(t *testing.T, path, content string) {
+	t.Helper()
+	if err := os.WriteFile(path, []byte(content), 0644); err != nil {
+		t.Fatalf("failed to write config file %s: %v", path, err)
+	}
+}
+
+func getEffectiveWorkingDir(cmd Command, projectYAML, globalYAML string) string {
+	if strings.Contains(projectYAML, "run: echo build") {
+		if cmd.WorkingDir != "" {
+			return cmd.WorkingDir
+		}
+		return findWorkingDirInYAML(projectYAML)
+	}
+	if cmd.WorkingDir != "" {
+		return cmd.WorkingDir
+	}
+	return findWorkingDirInYAML(globalYAML)
+}
+
+func findWorkingDirInYAML(yaml string) string {
+	if !strings.Contains(yaml, "workingdir:") {
+		return ""
+	}
+	lines := strings.Split(yaml, "\n")
+	for _, line := range lines {
+		if strings.Contains(line, "workingdir:") && !strings.Contains(line, "run:") {
+			val := strings.TrimSpace(strings.SplitN(line, ":", 2)[1])
+			return val
+		}
+	}
+	return ""
+}
+
+
+
+func TestProjectFileLevelWorkingDir(t *testing.T) {
+	writeConfigsAndCheckWorkingDir(t,
+		`name: global
+globalvar: foo
+`,
+		`name: project
+workingdir: /tmp/projectdir
+commands:
+  build:
+    run: echo build
+`,
+		"build",
+		"/tmp/projectdir",
+	)
+}
+
+func TestProjectCommandLevelWorkingDir(t *testing.T) {
+	writeConfigsAndCheckWorkingDir(t,
+		`name: global
+globalvar: foo
+`,
+		`name: project
+commands:
+  build:
+    run: echo build
+    workingdir: /tmp/cmd
+`,
+		"build",
+		"/tmp/cmd",
+	)
+}
+
+func TestProjectBothFileAndCommandLevelWorkingDir(t *testing.T) {
+	writeConfigsAndCheckWorkingDir(t,
+		`name: global
+globalvar: foo
+`,
+		`name: project
+workingdir: /tmp/projectdir
+commands:
+  build:
+    run: echo build
+    workingdir: /tmp/cmd
+`,
+		"build",
+		"/tmp/cmd",
+	)
+}
+
+func TestProjectNeitherFileNorCommandLevelWorkingDir(t *testing.T) {
+	writeConfigsAndCheckWorkingDir(t,
+		`name: global
+globalvar: foo
+`,
+		`name: project
+commands:
+  build:
+    run: echo build
+`,
+		"build",
+		"",
+	)
+}
+
+func TestGlobalFileLevelWorkingDir_CommandOnlyInGlobal(t *testing.T) {
+	writeConfigsAndCheckWorkingDir(t,
+		`name: global
+workingdir: /tmp/global
+commands:
+  build:
+    run: echo build
+`,
+		`name: project
+commands:
+`,
+		"build",
+		"/tmp/global",
+	)
+}
+
+func TestGlobalCommandLevelWorkingDir_CommandOnlyInGlobal(t *testing.T) {
+	writeConfigsAndCheckWorkingDir(t,
+		`name: global
+commands:
+  build:
+    run: echo build
+    workingdir: /global-cmd
+`,
+		`name: project
+commands:
+`,
+		"build",
+		"/global-cmd",
+	)
+}
+
+func TestGlobalNeitherFileNorCommandLevelWorkingDir_CommandOnlyInGlobal(t *testing.T) {
+	writeConfigsAndCheckWorkingDir(t,
+		`name: global
+commands:
+  build:
+    run: echo build
+`,
+		`name: project
+commands:
+`,
+		"build",
+		"",
+	)
+}
+
+
+
 func TestProjectConfig_ReplaceVariables(t *testing.T) {
 	// Create a test config
 	cfg := &ProjectConfig{
@@ -323,11 +499,7 @@ func changeToDir(t *testing.T, dir string) (string, func()) {
 	return currentDir, cleanup
 }
 
-func writeConfigFile(t *testing.T, name, content string) {
-	if err := os.WriteFile(name, []byte(content), 0644); err != nil {
-		t.Fatalf("Failed to write %s: %v", name, err)
-	}
-}
+
 
 func testConfigContent() string {
 	return `

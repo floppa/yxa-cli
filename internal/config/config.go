@@ -14,9 +14,10 @@ import (
 
 // ProjectConfig represents the structure of the yxa.yml file
 type ProjectConfig struct {
-	Name      string             `yaml:"name"`
-	Variables map[string]string  `yaml:"variables,omitempty"`
-	Commands  map[string]Command `yaml:"commands"`
+	Name       string             `yaml:"name"`
+	Variables  map[string]string  `yaml:"variables,omitempty"`
+	Commands   map[string]Command `yaml:"commands"`
+	WorkingDir string             `yaml:"workingdir,omitempty"` // Directory-level workingdir
 	// Internal field to store environment variables (not from YAML)
 	envVars map[string]string
 }
@@ -33,6 +34,7 @@ type Command struct {
 	Timeout     string            `yaml:"timeout,omitempty"`     // Timeout for command execution (e.g. "30s", "5m")
 	Parallel    bool              `yaml:"parallel,omitempty"`    // Whether to run commands in parallel
 	Params      []Param           `yaml:"params,omitempty"`      // Command parameters (flags and positional)
+	WorkingDir  string            `yaml:"workingdir,omitempty"`  // Command-level workingdir
 }
 
 // LoadConfig loads the project configuration from the yxa.yml file (legacy, cwd)
@@ -55,6 +57,7 @@ func MergeConfigs(global, project *ProjectConfig) *ProjectConfig {
 	if project.Name != "" {
 		merged.Name = project.Name
 	}
+
 	// Merge variables
 	merged.Variables = map[string]string{}
 	for k, v := range global.Variables {
