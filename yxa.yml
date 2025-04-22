@@ -176,21 +176,20 @@ commands:
     condition: "$GOOS == darwin"
 
   # Example of command with hooks
-  build-with-hooks:
+  hooks-test:
     description: Build with pre and post hooks
-    pre: echo "Starting build process..."
-    run: go build -o yxa
-    post: echo "Build completed successfully!"
-    depends: [test]
+    pre: echo "Running pre-hook"
+    run: echo "Build"
+    post: echo "Build completed successfully! Running post-hook"
     
   # Example of command with timeout
-  timeout-example:
+  timeout-test:
     description: Command that will timeout after 5 seconds
     run: sleep 10
     timeout: 5s
     
   # Example of parallel command execution
-  parallel-tasks:
+  parallel-test:
     description: Run multiple tasks in parallel
     tasks:
       - echo "Task 1 running..." && sleep 2 && echo "Task 1 completed"
@@ -199,10 +198,26 @@ commands:
     parallel: true
     
   # Example of sequential command execution with timeout
-  sequential-tasks:
+  sequential-test:
     description: Run multiple tasks sequentially with a timeout
     tasks:
       - echo "Step 1" && sleep 1
       - echo "Step 2" && sleep 1
       - echo "Step 3" && sleep 1
     timeout: 5s
+
+  subcommands-test:
+    description: Demo of subcommands
+    commands:
+      - run: echo "Hello from subcommand 1"
+        description: Says hello
+      - run: echo "Goodbye from subcommand 2"
+        description: Says goodbye
+      - tasks:
+          - echo "This is task 1 in subcommand 3"
+          - echo "This is task 2 in subcommand 3"
+        description: Runs multiple tasks
+
+  check-tests:
+    description: Run all check-tests-commands
+    depends: [hooks-test, parallel-test, sequential-test, subcommands-test, timeout-test]

@@ -28,6 +28,9 @@ dist/
 *.swp
 *.swo
 
+coverage.html
+/yxa
+
 # OS specific files
 .DS_Store
 Thumbs.db
