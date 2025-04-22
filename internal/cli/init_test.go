@@ -8,175 +8,163 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func TestInitializeConfig(t *testing.T) {
-	// Save current working directory
+// setupTestEnv creates a temporary directory, sets it as the current working directory,
+// and returns the original working directory and a cleanup function.
+func setupTestEnv(t *testing.T) (string, func()) {
+	t.Helper()
 	originalWd, err := os.Getwd()
 	if err != nil {
 		t.Fatalf("Failed to get current working directory: %v", err)
 	}
-	defer func() {
+	tempDir := t.TempDir()
+	err = os.Chdir(tempDir)
+	if err != nil {
+		t.Fatalf("Failed to change to temp directory: %v", err)
+	}
+	cleanup := func() {
 		if err := os.Chdir(originalWd); err != nil {
 			t.Logf("Warning: Failed to restore original working directory: %v", err)
 		}
-	}() // Restore original working directory
-
-	// Create a temporary directory for test files
-	tempDir := t.TempDir()
-
-	// Create a valid yxa.yml file in the temporary directory
-	validConfig := `
-variables:
-  PROJECT_NAME: test-project
-commands:
-  test:
-    run: echo "Test command"
-    description: A test command
-  with-deps:
-    run: echo "Command with dependencies"
-    depends: [test]
-`
-	err = os.WriteFile(filepath.Join(tempDir, "yxa.yml"), []byte(validConfig), 0644)
-	if err != nil {
-		t.Fatalf("Failed to create test config file: %v", err)
 	}
+	return tempDir, cleanup
+}
+
+func TestInitializeApp_Execution(t *testing.T) {
 
 	// Test with valid configuration
-	t.Run("valid config", func(t *testing.T) {
-		// Change to the temporary directory
-		err = os.Chdir(tempDir)
-		if err != nil {
-			t.Fatalf("Failed to change to temp directory: %v", err)
-		}
+	t.Run("valid config loading via execute", func(t *testing.T) {
+		tempDir, cleanup := setupTestEnv(t)
+		defer cleanup()
 
-		// Initialize config
-		cfg, err := InitializeConfig()
-		assert.NoError(t, err)
-		assert.NotNil(t, cfg)
-		assert.Equal(t, "test-project", cfg.Variables["PROJECT_NAME"])
-		assert.Len(t, cfg.Commands, 2) // test and with-deps
-	})
-
-	// Test with circular dependencies
-	t.Run("circular dependencies", func(t *testing.T) {
-		// Change to the temporary directory
-		err = os.Chdir(tempDir)
-		if err != nil {
-			t.Fatalf("Failed to change to temp directory: %v", err)
-		}
-
-		// Create a config with circular dependencies
-		circularConfig := `
+		validConfig := `
 variables:
   PROJECT_NAME: test-project
 commands:
   test:
     run: echo "Test command"
     description: A test command
+`
+		err := os.WriteFile(filepath.Join(tempDir, "yxa.yml"), []byte(validConfig), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create test config file: %v", err)
+		}
+
+		// Initialize app (config is nil initially)
+		root, err := InitializeApp()
+		assert.NoError(t, err)
+		assert.NotNil(t, root)
+		assert.Nil(t, root.Config) // Config not loaded yet
+		assert.NotNil(t, root.Executor)
+		assert.NotNil(t, root.Handler)
+		assert.NotNil(t, root.RootCmd)
+
+		// Manually call the loading logic (simulates PersistentPreRunE)
+		// Pass empty string for config flag value to test default loading
+		err = root.loadConfigAndRegisterCommands("") 
+
+		// Check state AFTER loading
+		assert.NoError(t, err) // Loading should succeed
+		assert.NotNil(t, root.Config) // Config should be loaded now
+		assert.Equal(t, "test-project", root.Config.Variables["PROJECT_NAME"])
+		assert.Len(t, root.Config.Commands, 1)
+		testCmd, _, _ := root.RootCmd.Find([]string{"test"}) // Check command registered
+		assert.NotNil(t, testCmd)
+		assert.Equal(t, "test", testCmd.Name())
+	})
+
+	// Test with missing config file
+	t.Run("missing config file during load", func(t *testing.T) {
+		_, cleanup := setupTestEnv(t) // Just need the clean env
+		defer cleanup()
+
+		// Initialize app
+		root, err := InitializeApp()
+		assert.NoError(t, err)
+		assert.NotNil(t, root)
+		assert.Nil(t, root.Config)
+
+		// Manually call the loading logic with empty flag value
+		err = root.loadConfigAndRegisterCommands("")
+
+		// Check state AFTER loading attempt
+		assert.Error(t, err) // Loading should fail
+		assert.Nil(t, root.Config) // Config should still be nil
+		assert.Contains(t, err.Error(), "failed to resolve config path") // Check for expected error
+	})
+
+	// Test with circular dependencies detected during load
+	t.Run("circular dependencies detected during load", func(t *testing.T) {
+		tempDir, cleanup := setupTestEnv(t)
+		defer cleanup()
+
+		circularConfig := `
+commands:
   circular1:
     depends: [circular2]
   circular2:
     depends: [circular1]
 `
-		err = os.WriteFile(filepath.Join(tempDir, "yxa.yml"), []byte(circularConfig), 0644)
+		err := os.WriteFile(filepath.Join(tempDir, "yxa.yml"), []byte(circularConfig), 0644)
 		if err != nil {
 			t.Fatalf("Failed to create circular config file: %v", err)
-		}
-
-		// Initialize config (should detect circular dependencies)
-		cfg, err := InitializeConfig()
-		assert.Error(t, err)
-		assert.Nil(t, cfg)
-		assert.Contains(t, err.Error(), "circular dependency")
-	})
-
-	// Test with missing config file
-	t.Run("missing config", func(t *testing.T) {
-		// Create a new empty directory
-		emptyDir := filepath.Join(tempDir, "empty")
-		err = os.Mkdir(emptyDir, 0755)
-		if err != nil {
-			t.Fatalf("Failed to create empty directory: %v", err)
-		}
-
-		// Change to the empty directory
-		err = os.Chdir(emptyDir)
-		if err != nil {
-			t.Fatalf("Failed to change to empty directory: %v", err)
-		}
-
-		// Initialize config (should fail)
-		cfg, err := InitializeConfig()
-		assert.Error(t, err)
-		assert.Nil(t, cfg)
-	})
-}
-
-func TestInitializeApp(t *testing.T) {
-	// Save current working directory
-	originalWd, err := os.Getwd()
-	if err != nil {
-		t.Fatalf("Failed to get current working directory: %v", err)
-	}
-	defer func() {
-		if err := os.Chdir(originalWd); err != nil {
-			t.Logf("Warning: Failed to restore original working directory: %v", err)
-		}
-	}() // Restore original working directory
-
-	// Create a temporary directory for test files
-	tempDir := t.TempDir()
-
-	// Create a valid yxa.yml file in the temporary directory
-	validConfig := `
-variables:
-  PROJECT_NAME: test-project
-commands:
-  test:
-    run: echo "Test command"
-    description: A test command
-`
-	err = os.WriteFile(filepath.Join(tempDir, "yxa.yml"), []byte(validConfig), 0644)
-	if err != nil {
-		t.Fatalf("Failed to create test config file: %v", err)
-	}
-
-	// Test with valid configuration
-	t.Run("valid config", func(t *testing.T) {
-		// Change to the temporary directory
-		err = os.Chdir(tempDir)
-		if err != nil {
-			t.Fatalf("Failed to change to temp directory: %v", err)
 		}
 
 		// Initialize app
 		root, err := InitializeApp()
 		assert.NoError(t, err)
 		assert.NotNil(t, root)
-		assert.NotNil(t, root.Config)
-		assert.NotNil(t, root.Executor)
-		assert.NotNil(t, root.Handler)
-		assert.NotNil(t, root.RootCmd)
-		assert.Equal(t, "yxa", root.RootCmd.Use)
+		assert.Nil(t, root.Config)
+
+		// Manually call the loading logic
+		err = root.loadConfigAndRegisterCommands("") 
+
+		// Check state AFTER loading attempt
+		assert.Error(t, err)
+		// Config might be partially loaded before validation fails
+		// assert.Nil(t, root.Config) 
+		assert.Contains(t, err.Error(), "circular dependency")
 	})
 
-	// Test with missing config file
-	t.Run("missing config", func(t *testing.T) {
-		// Create a new empty directory
-		emptyDir := filepath.Join(tempDir, "empty")
-		err = os.Mkdir(emptyDir, 0755)
+	// Test using --config flag during load
+	t.Run("config flag during load", func(t *testing.T) {
+		tempDir, cleanup := setupTestEnv(t)
+		defer cleanup()
+
+		// Create config in a sub-directory
+		subDir := filepath.Join(tempDir, "sub")
+		err := os.Mkdir(subDir, 0755)
 		if err != nil {
-			t.Fatalf("Failed to create empty directory: %v", err)
+			t.Fatalf("Failed to create sub directory: %v", err)
+		}
+		configPath := filepath.Join(subDir, "custom-config.yml")
+		flagConfig := `
+variables:
+  FLAG_VAR: flag-value
+commands:
+  flagcmd:
+    run: echo "flag command"
+`
+		err = os.WriteFile(configPath, []byte(flagConfig), 0644)
+		if err != nil {
+			t.Fatalf("Failed to create flag config file: %v", err)
 		}
 
-		// Change to the empty directory
-		err = os.Chdir(emptyDir)
-		if err != nil {
-			t.Fatalf("Failed to change to empty directory: %v", err)
-		}
-
-		// Initialize app (should fail)
+		// Initialize app
 		root, err := InitializeApp()
-		assert.Error(t, err)
-		assert.Nil(t, root)
+		assert.NoError(t, err)
+		assert.NotNil(t, root)
+		assert.Nil(t, root.Config)
+
+		// Manually call the loading logic with the specific config path
+		err = root.loadConfigAndRegisterCommands(configPath)
+
+		// Check state AFTER loading
+		assert.NoError(t, err)
+		assert.NotNil(t, root.Config)
+		assert.Equal(t, "flag-value", root.Config.Variables["FLAG_VAR"])
+		assert.Len(t, root.Config.Commands, 1)
+		flagCmd, _, _ := root.RootCmd.Find([]string{"flagcmd"})
+		assert.NotNil(t, flagCmd)
+		assert.Equal(t, "flagcmd", flagCmd.Name())
 	})
 }

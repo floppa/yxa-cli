@@ -1,49 +1,18 @@
 package cli
 
 import (
-	"fmt"
-	"os"
-
-	"github.com/floppa/yxa-cli/internal/config"
 	"github.com/floppa/yxa-cli/internal/executor"
 )
 
-// InitializeConfig loads the project configuration and validates it
-func InitializeConfig() (*config.ProjectConfig, error) {
-	// Resolve config file path (flag, env, local, global)
-	path, err := config.ResolveConfigPath(ConfigFlag)
-	if err != nil {
-		return nil, fmt.Errorf("failed to resolve config path: %w", err)
-	}
-
-	cfg, err := config.LoadConfigFrom(path)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load configuration: %w", err)
-	}
-
-	// Validate command dependencies
-	if err := validateCommandDependencies(cfg); err != nil {
-		return nil, fmt.Errorf("invalid command dependencies: %w", err)
-	}
-
-	return cfg, nil
-}
-
-// InitializeApp is a variable that holds the function to initialize the application
-// This allows it to be mocked for testing
+// InitializeApp sets up the basic root command structure without loading configuration.
+// Configuration loading and command registration will happen in PersistentPreRunE.
 var InitializeApp = func() (*RootCommand, error) {
-	// Load and validate configuration
-	cfg, err := InitializeConfig()
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "Error initializing application: %v\n", err)
-		return nil, err
-	}
-
 	// Create a default executor
 	exec := executor.NewDefaultExecutor()
 
-	// Create the root command
-	root := NewRootCommand(cfg, exec)
+	// Create the root command with nil config initially
+	// Config will be loaded and commands registered in PersistentPreRunE
+	root := NewRootCommand(nil, exec)
 
 	return root, nil
 }

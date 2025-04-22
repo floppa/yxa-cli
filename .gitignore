@@ -4,7 +4,7 @@
 *.dll
 *.so
 *.dylib
-yxa
+yxa$
 
 # Test binary, built with `go test -c`
 *.test

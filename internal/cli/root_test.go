@@ -83,6 +83,10 @@ func TestNewRootCommand_WithParams(t *testing.T) {
 		},
 	}
 	root := NewRootCommand(cfg, executor.NewDefaultExecutor())
+	// Manually load config and register commands, simulating PersistentPreRunE
+	err := root.loadConfigAndRegisterCommands("")
+	assert.NoError(t, err, "Config loading should succeed")
+
 	cmd, _, err := root.RootCmd.Find([]string{"with-param"})
 	if err != nil {
 		t.Fatalf("Find failed: %v", err)
@@ -164,6 +168,9 @@ func TestNewRootCommand(t *testing.T) {
 
 	// Create a root command
 	root := NewRootCommand(cfg, realExec)
+	// Manually load config and register commands, simulating PersistentPreRunE
+	err := root.loadConfigAndRegisterCommands("")
+	assert.NoError(t, err, "Config loading should succeed")
 
 	// Verify the root command
 	assert.NotNil(t, root)
@@ -265,14 +272,20 @@ func TestRootCommand_Execute(t *testing.T) {
 			stdout := &bytes.Buffer{}
 			stderr := &bytes.Buffer{}
 			realExec := executor.NewDefaultExecutor()
-			realExec.SetStdout(stdout)
-			realExec.SetStderr(stderr)
-			root := NewRootCommand(cfg, realExec)
-			root.RootCmd.SetOut(stdout)
-			root.RootCmd.SetErr(stderr)
-			root.RootCmd.SetArgs(tt.args)
+			realExec.SetStdout(stdout) // Set on executor instance
+			realExec.SetStderr(stderr) // Set on executor instance
 
-			err := root.Execute()
+			root := NewRootCommand(cfg, realExec)
+
+			// Ensure commands are registered from the in-memory cfg *before* Execute
+			err := root.loadConfigAndRegisterCommands("")
+			assert.NoError(t, err, "Manual config load should succeed")
+
+			root.RootCmd.SetOut(stdout) // Set output on the command itself
+			root.RootCmd.SetErr(stderr)
+			root.RootCmd.SetArgs(tt.args) // Set args directly on the command
+
+			err = root.Execute() // Execute should now find the command
 			if tt.expectError {
 				assert.Error(t, err)
 			} else {

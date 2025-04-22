@@ -2,11 +2,12 @@ package cli
 
 import (
 	"fmt"
+	"os"
+	"sync"
+
 	"github.com/floppa/yxa-cli/internal/config"
 	"github.com/floppa/yxa-cli/internal/executor"
 	"github.com/spf13/cobra"
-	"os"
-	"sync"
 )
 
 var exitFunc = os.Exit
@@ -30,8 +31,11 @@ func NewRootCommand(cfg *config.ProjectConfig, exec executor.CommandExecutor) *R
 		Handler:  NewCommandHandler(cfg, exec),
 	}
 
+	// Capture root for use in the closure and method below
+	r := root
+
 	// Create the root command
-	root.RootCmd = &cobra.Command{
+	r.RootCmd = &cobra.Command{
 		Use:   "yxa",
 		Short: "the morakniv of cli´s",
 		Long:  `yxa is a CLI tool that is defined by a config file - yxa.yml`,
@@ -40,20 +44,61 @@ func NewRootCommand(cfg *config.ProjectConfig, exec executor.CommandExecutor) *R
 			DisableNoDescFlag:   false,
 			DisableDescriptions: false,
 		},
+		// PersistentPreRunE now delegates to the dedicated loading method.
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			// ConfigFlag is populated by Cobra before this hook runs.
+			return r.loadConfigAndRegisterCommands(ConfigFlag)
+		},
 	}
 
 	// Add persistent config flag
-	root.RootCmd.PersistentFlags().StringVar(&ConfigFlag, "config", "", "config file (default: yxa.yml in current directory, or global config)")
+	r.RootCmd.PersistentFlags().StringVar(&ConfigFlag, "config", "", "config file (default: yxa.yml in current directory, or global config)")
 	// Add persistent dry-run flag
-	root.RootCmd.PersistentFlags().BoolVarP(&root.DryRun, "dry-run", "d", false, "Show commands to be executed without running them")
-
-	// Register commands from configuration
-	root.registerCommands()
+	r.RootCmd.PersistentFlags().BoolVarP(&r.DryRun, "dry-run", "d", false, "Show commands to be executed without running them")
 
 	// Setup command completion
-	root.setupCompletion()
+	r.setupCompletion()
 
-	return root
+	return r
+}
+
+// loadConfigAndRegisterCommands performs the actual configuration loading,
+// validation, and command registration logic.
+// This is called by PersistentPreRunE.
+func (r *RootCommand) loadConfigAndRegisterCommands(configFlagValue string) error {
+	var cfg *config.ProjectConfig
+	var err error
+
+	// If a config wasn't provided at initialization, load it from file.
+	if r.Config == nil {
+		// Resolve config file path using the provided flag value
+		path, err := config.ResolveConfigPath(configFlagValue)
+		if err != nil {
+			return fmt.Errorf("failed to resolve config path: %w", err)
+		}
+
+		cfg, err = config.LoadConfigFrom(path)
+		if err != nil {
+			return fmt.Errorf("failed to load configuration: %w", err)
+		}
+		r.Config = cfg // Store the loaded config
+	} else {
+		// Use the config provided during initialization
+		cfg = r.Config
+	}
+
+	// Validate command dependencies using the determined config (cfg)
+	if err = validateCommandDependencies(cfg); err != nil {
+		return fmt.Errorf("invalid command dependencies: %w", err)
+	}
+
+	// Re-initialize the handler with the final config
+	r.Handler = NewCommandHandler(cfg, r.Executor)
+
+	// Register commands now that config is loaded and validated
+	r.registerCommands()
+
+	return nil
 }
 
 // Execute executes the root command
