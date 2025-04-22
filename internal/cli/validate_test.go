@@ -99,7 +99,7 @@ func TestParallelCommands(t *testing.T) {
 			"parallel": {
 				Description: "Parallel command",
 				Parallel:    true,
-				Commands:    map[string]string{"cmd1": "echo 'cmd1'", "cmd2": "echo 'cmd2'"},
+				Tasks:       []string{"echo 'cmd1'", "echo 'cmd2'"},
 			},
 		},
 	}

@@ -54,20 +54,33 @@ commands:
   # Command with parallel execution
   parallel-parent:
     run: echo "Starting parallel execution"
-    commands:
-      parallel1: sleep 1 && echo "Parallel command 1" > $OUTPUT_DIR/parallel1.txt
-      parallel2: sleep 1 && echo "Parallel command 2" > $OUTPUT_DIR/parallel2.txt
+    tasks:
+      - sleep 1 && echo "Parallel command 1" > $OUTPUT_DIR/parallel1.txt
+      - sleep 1 && echo "Parallel command 2" > $OUTPUT_DIR/parallel2.txt
     parallel: true
-    description: Executes commands in parallel
+    description: Executes tasks in parallel
+
+  # Command with subcommands
+  subcommands:
+    description: Demo of subcommands
+    commands:
+      - run: echo "Hello from subcommand 1"
+        description: Says hello
+      - run: echo "Goodbye from subcommand 2"
+        description: Says goodbye
+      - tasks:
+          - echo "This is task 1 in subcommand 3"
+          - echo "This is task 2 in subcommand 3"
+        description: Runs multiple tasks
 
   # Command with sequential execution
   sequential-parent:
     run: echo "Starting sequential execution"
-    commands:
-      seq1: sleep 1 && echo "Sequential command 1" > $OUTPUT_DIR/seq1.txt
-      seq2: sleep 1 && echo "Sequential command 2" > $OUTPUT_DIR/seq2.txt
+    tasks:
+      - sleep 1 && echo "Sequential command 1" > $OUTPUT_DIR/seq1.txt
+      - sleep 1 && echo "Sequential command 2" > $OUTPUT_DIR/seq2.txt
     parallel: false
-    description: Executes commands sequentially
+    description: Executes tasks sequentially
 
   # Command with pre and post hooks
   with-hooks:

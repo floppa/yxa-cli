@@ -49,6 +49,11 @@ func NewRootCommand(cfg *config.ProjectConfig, exec executor.CommandExecutor) *R
 			// ConfigFlag is populated by Cobra before this hook runs.
 			return r.loadConfigAndRegisterCommands(ConfigFlag)
 		},
+		// Add RunE to ensure configuration is loaded even when no command is specified
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// If no command is specified, just show the help
+			return cmd.Help()
+		},
 	}
 
 	// Add persistent config flag
@@ -62,41 +67,70 @@ func NewRootCommand(cfg *config.ProjectConfig, exec executor.CommandExecutor) *R
 	return r
 }
 
-// loadConfigAndRegisterCommands performs the actual configuration loading,
-// validation, and command registration logic.
-// This is called by PersistentPreRunE.
+// loadConfigAndRegisterCommands loads the configuration and registers commands
 func (r *RootCommand) loadConfigAndRegisterCommands(configFlagValue string) error {
-	var cfg *config.ProjectConfig
+	var loadedConfig *config.ProjectConfig
 	var err error
 
-	// If a config wasn't provided at initialization, load it from file.
-	if r.Config == nil {
-		// Resolve config file path using the provided flag value
-		path, err := config.ResolveConfigPath(configFlagValue)
-		if err != nil {
-			return fmt.Errorf("failed to resolve config path: %w", err)
-		}
+	// Determine if we need to load a new configuration
+	loadNewConfig := false
 
-		cfg, err = config.LoadConfigFrom(path)
-		if err != nil {
-			return fmt.Errorf("failed to load configuration: %w", err)
-		}
-		r.Config = cfg // Store the loaded config
-	} else {
-		// Use the config provided during initialization
-		cfg = r.Config
+	// If configFlagValue is provided, always try to load it
+	if configFlagValue != "" {
+		loadNewConfig = true
+	} else if r.Config == nil {
+		// No config loaded yet, try to load from default locations
+		loadNewConfig = true
 	}
 
-	// Validate command dependencies using the determined config (cfg)
-	if err = validateCommandDependencies(cfg); err != nil {
-		return fmt.Errorf("invalid command dependencies: %w", err)
+	// Load configuration if needed
+	if loadNewConfig {
+		// If configFlagValue is provided, use it directly
+		if configFlagValue != "" {
+			loadedConfig, err = config.LoadConfigFrom(configFlagValue)
+			if err != nil {
+				return fmt.Errorf("failed to load configuration from '%s': %w", configFlagValue, err)
+			}
+		} else {
+			// Try to load from the current directory first
+			localPath := "./yxa.yml"
+			if _, statErr := os.Stat(localPath); statErr == nil {
+				// Local config file exists, load it
+				loadedConfig, err = config.LoadConfigFrom(localPath)
+				if err != nil {
+					return fmt.Errorf("failed to load local configuration: %w", err)
+				}
+			} else {
+				// No local config, try to resolve using standard paths
+				path, err := config.ResolveConfigPath(configFlagValue)
+				if err != nil {
+					return fmt.Errorf("failed to resolve config path: %w", err)
+				}
+
+				loadedConfig, err = config.LoadConfigFrom(path)
+				if err != nil {
+					return fmt.Errorf("failed to load configuration: %w", err)
+				}
+			}
+		}
+
+		// Store the loaded config
+		r.Config = loadedConfig
+
+		// Validate command dependencies
+		if err = validateCommandDependencies(r.Config); err != nil {
+			return fmt.Errorf("invalid command dependencies: %w", err)
+		}
+
+		// Re-initialize the handler with the loaded config
+		r.Handler = NewCommandHandler(r.Config, r.Executor)
+
+		// Clear existing user commands before registering new ones
+		r.clearUserCommands()
+
+		// Register commands based on the loaded config
+		r.registerCommands()
 	}
-
-	// Re-initialize the handler with the final config
-	r.Handler = NewCommandHandler(cfg, r.Executor)
-
-	// Register commands now that config is loaded and validated
-	r.registerCommands()
 
 	return nil
 }
@@ -167,6 +201,28 @@ func (r *RootCommand) registerCommands() {
 
 		// Add the command to the root command
 		r.RootCmd.AddCommand(cobraCmd)
+	}
+}
+
+// clearUserCommands removes all user-defined commands from the root command
+// while preserving built-in commands like help and completion
+func (r *RootCommand) clearUserCommands() {
+	// Get all commands
+	commands := r.RootCmd.Commands()
+	
+	// Create a copy of the commands slice to avoid modification during iteration
+	commandsCopy := make([]*cobra.Command, len(commands))
+	copy(commandsCopy, commands)
+	
+	// Remove user-defined commands
+	for _, cmd := range commandsCopy {
+		// Skip built-in commands
+		if cmd.Name() == "help" || cmd.Name() == "completion" {
+			continue
+		}
+		
+		// Remove the command
+		r.RootCmd.RemoveCommand(cmd)
 	}
 }
 

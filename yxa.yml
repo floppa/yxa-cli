@@ -192,17 +192,17 @@ commands:
   # Example of parallel command execution
   parallel-tasks:
     description: Run multiple tasks in parallel
-    commands:
-      task1: echo "Task 1 running..." && sleep 2 && echo "Task 1 completed"
-      task2: echo "Task 2 running..." && sleep 1 && echo "Task 2 completed"
-      task3: echo "Task 3 running..." && sleep 3 && echo "Task 3 completed"
+    tasks:
+      - echo "Task 1 running..." && sleep 2 && echo "Task 1 completed"
+      - echo "Task 2 running..." && sleep 1 && echo "Task 2 completed"
+      - echo "Task 3 running..." && sleep 3 && echo "Task 3 completed"
     parallel: true
     
   # Example of sequential command execution with timeout
   sequential-tasks:
     description: Run multiple tasks sequentially with a timeout
-    commands:
-      step1: echo "Step 1" && sleep 1
-      step2: echo "Step 2" && sleep 1
-      step3: echo "Step 3" && sleep 1
+    tasks:
+      - echo "Step 1" && sleep 1
+      - echo "Step 2" && sleep 1
+      - echo "Step 3" && sleep 1
     timeout: 5s

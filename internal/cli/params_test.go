@@ -191,6 +191,86 @@ func TestAddParametersToCommand(t *testing.T) {
 	assert.Equal(t, "default", unknownTypeFlag)
 }
 
+func TestProcessFlagParameter_Success(t *testing.T) {
+	cmd := &cobra.Command{
+		Use: "test",
+	}
+
+	// Register all types of flags
+	cmd.Flags().String("string-param", "string-value", "string param")
+	cmd.Flags().Int("int-param", 42, "int param")
+	cmd.Flags().Float64("float-param", 3.14, "float param")
+	cmd.Flags().Bool("bool-param", true, "bool param")
+	cmd.Flags().String("default-param", "default-value", "default param with unknown type")
+
+	// Test string parameter
+	param := config.Param{
+		Name:        "string-param",
+		Type:        "string",
+		Description: "A string param",
+		Flag:        true,
+	}
+	val, err := processFlagParameter(cmd, param)
+	assert.NoError(t, err)
+	assert.Equal(t, "string-value", val)
+
+	// Test int parameter
+	param = config.Param{
+		Name:        "int-param",
+		Type:        "int",
+		Description: "An int param",
+		Flag:        true,
+	}
+	val, err = processFlagParameter(cmd, param)
+	assert.NoError(t, err)
+	assert.Equal(t, "42", val)
+
+	// Test float parameter
+	param = config.Param{
+		Name:        "float-param",
+		Type:        "float",
+		Description: "A float param",
+		Flag:        true,
+	}
+	val, err = processFlagParameter(cmd, param)
+	assert.NoError(t, err)
+	assert.Equal(t, "3.14", val)
+
+	// Test bool parameter
+	param = config.Param{
+		Name:        "bool-param",
+		Type:        "bool",
+		Description: "A bool param",
+		Flag:        true,
+	}
+	val, err = processFlagParameter(cmd, param)
+	assert.NoError(t, err)
+	assert.Equal(t, "true", val)
+
+	// Test default type (unknown type defaults to string)
+	param = config.Param{
+		Name:        "default-param",
+		Type:        "unknown",
+		Description: "A param with unknown type",
+		Flag:        true,
+	}
+	val, err = processFlagParameter(cmd, param)
+	assert.NoError(t, err)
+	assert.Equal(t, "default-value", val)
+
+	// Test parameter with shorthand notation
+	cmd.Flags().String("shorthand", "shorthand-value", "param with shorthand")
+	param = config.Param{
+		Name:        "shorthand|s",
+		Type:        "string",
+		Description: "A param with shorthand",
+		Flag:        true,
+	}
+	val, err = processFlagParameter(cmd, param)
+	assert.NoError(t, err)
+	assert.Equal(t, "shorthand-value", val)
+}
+
 func TestProcessFlagParameter_Errors(t *testing.T) {
 	cmd := &cobra.Command{
 		Use: "test",

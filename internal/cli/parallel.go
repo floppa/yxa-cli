@@ -96,10 +96,10 @@ func syncWrite(writer io.Writer, format string, args ...interface{}) {
 // outputMutex protects access to the shared output writer
 var outputMutex sync.Mutex
 
-// executeParallelCommands executes multiple commands in parallel
+// executeParallelCommands executes multiple tasks in parallel
 func (h *CommandHandler) executeParallelCommands(cmdName string, cmd config.Command, timeout time.Duration) error {
 	var wg sync.WaitGroup
-	errChan := make(chan error, len(cmd.Commands))
+	errChan := make(chan error, len(cmd.Tasks))
 
 	// We'll use a mutex to protect access to the shared output writer
 
@@ -114,16 +114,19 @@ func (h *CommandHandler) executeParallelCommands(cmdName string, cmd config.Comm
 		defer cancel()
 	}
 
-	// Start all commands in parallel
-	for name, cmdStr := range cmd.Commands {
+	// Start all tasks in parallel
+	for i, cmdStr := range cmd.Tasks {
 		wg.Add(1)
-		go func(name, cmdStr string) {
+		go func(index int, cmdStr string) {
 			defer wg.Done()
+			
+			// Create a command ID for logging
+			cmdID := fmt.Sprintf("#%d", index+1)
 
 			// Replace variables in the command
 			cmdStr = h.replaceVariablesInString(cmdStr, nil)
 			// Log the command execution to stdout so it's visible in the main output
-			syncWrite(h.Executor.GetStdout(), "Executing parallel sub-command '%s' for '%s'...\n", name, cmdName)
+			syncWrite(h.Executor.GetStdout(), "Executing parallel sub-command %s for '%s'...\n", cmdID, cmdName)
 
 			// Create a dedicated buffer for each command
 			cmdOutputBuffer := &bytes.Buffer{}
@@ -134,7 +137,7 @@ func (h *CommandHandler) executeParallelCommands(cmdName string, cmd config.Comm
 			localExecutor.SetStderr(cmdOutputBuffer)
 
 			// Use the syncWrite helper for thread-safe output
-			syncWrite(h.Executor.GetStdout(), "[%s] Starting execution...\n", name)
+			syncWrite(h.Executor.GetStdout(), "[%s] Starting execution...\n", cmdID)
 
 			// Create a channel for command completion
 			done := make(chan error, 1)
@@ -147,7 +150,7 @@ func (h *CommandHandler) executeParallelCommands(cmdName string, cmd config.Comm
 
 				// Use the syncWrite helper for thread-safe output
 				if output != "" {
-					syncWrite(h.Executor.GetStdout(), "[%s] %s\n", name, output)
+					syncWrite(h.Executor.GetStdout(), "[%s] %s\n", cmdID, output)
 				}
 
 				// Send the error (if any) to the done channel
@@ -158,14 +161,14 @@ func (h *CommandHandler) executeParallelCommands(cmdName string, cmd config.Comm
 			select {
 			case err := <-done:
 				if err != nil {
-					errChan <- fmt.Errorf("sub-command '%s' for '%s' failed: %v", name, cmdName, err)
+					errChan <- fmt.Errorf("sub-command %s for '%s' failed: %v", cmdID, cmdName, err)
 				}
 			case <-ctx.Done():
 
 				// Command timed out or context was canceled
-				errChan <- fmt.Errorf("sub-command '%s' for '%s' timed out after %s", name, cmdName, timeout)
+				errChan <- fmt.Errorf("sub-command %s for '%s' timed out after %s", cmdID, cmdName, timeout)
 			}
-		}(name, cmdStr)
+		}(i, cmdStr)
 	}
 
 	// Wait for all commands to finish

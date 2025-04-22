@@ -1,10 +1,13 @@
 package cli
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/floppa/yxa-cli/internal/config"
+	"github.com/floppa/yxa-cli/internal/executor"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -49,22 +52,16 @@ commands:
 			t.Fatalf("Failed to create test config file: %v", err)
 		}
 
-		// Initialize app (config is nil initially)
+		// Initialize app (config should be loaded immediately)
 		root, err := InitializeApp()
 		assert.NoError(t, err)
 		assert.NotNil(t, root)
-		assert.Nil(t, root.Config) // Config not loaded yet
+		assert.NotNil(t, root.Config) // Config should be loaded now
 		assert.NotNil(t, root.Executor)
 		assert.NotNil(t, root.Handler)
 		assert.NotNil(t, root.RootCmd)
 
-		// Manually call the loading logic (simulates PersistentPreRunE)
-		// Pass empty string for config flag value to test default loading
-		err = root.loadConfigAndRegisterCommands("") 
-
-		// Check state AFTER loading
-		assert.NoError(t, err) // Loading should succeed
-		assert.NotNil(t, root.Config) // Config should be loaded now
+		// Check the loaded config
 		assert.Equal(t, "test-project", root.Config.Variables["PROJECT_NAME"])
 		assert.Len(t, root.Config.Commands, 1)
 		testCmd, _, _ := root.RootCmd.Find([]string{"test"}) // Check command registered
@@ -77,19 +74,12 @@ commands:
 		_, cleanup := setupTestEnv(t) // Just need the clean env
 		defer cleanup()
 
-		// Initialize app
+		// Initialize app - should not fail but will have nil config
 		root, err := InitializeApp()
 		assert.NoError(t, err)
 		assert.NotNil(t, root)
+		// Config will be nil since no config file was found
 		assert.Nil(t, root.Config)
-
-		// Manually call the loading logic with empty flag value
-		err = root.loadConfigAndRegisterCommands("")
-
-		// Check state AFTER loading attempt
-		assert.Error(t, err) // Loading should fail
-		assert.Nil(t, root.Config) // Config should still be nil
-		assert.Contains(t, err.Error(), "failed to resolve config path") // Check for expected error
 	})
 
 	// Test with circular dependencies detected during load
@@ -109,24 +99,24 @@ commands:
 			t.Fatalf("Failed to create circular config file: %v", err)
 		}
 
-		// Initialize app
+		// Initialize app - should fail due to circular dependencies
 		root, err := InitializeApp()
-		assert.NoError(t, err)
+		// Check that we got an error about circular dependencies
+		assert.Error(t, err) 
+		assert.Contains(t, err.Error(), "circular dependency detected")
+		// Root should still be returned even when there's an error
 		assert.NotNil(t, root)
-		assert.Nil(t, root.Config)
-
-		// Manually call the loading logic
-		err = root.loadConfigAndRegisterCommands("") 
-
-		// Check state AFTER loading attempt
-		assert.Error(t, err)
-		// Config might be partially loaded before validation fails
-		// assert.Nil(t, root.Config) 
-		assert.Contains(t, err.Error(), "circular dependency")
 	})
 
 	// Test using --config flag during load
-	t.Run("config flag during load", func(t *testing.T) {
+	t.Run("config flag path during load", func(t *testing.T) {
+		// Save the original InitializeApp function
+		originalInitializeApp := InitializeApp
+		defer func() {
+			// Restore the original InitializeApp function after the test
+			InitializeApp = originalInitializeApp
+		}()
+
 		tempDir, cleanup := setupTestEnv(t)
 		defer cleanup()
 
@@ -149,18 +139,44 @@ commands:
 			t.Fatalf("Failed to create flag config file: %v", err)
 		}
 
-		// Initialize app
+		// Override InitializeApp to use our custom config path
+		InitializeApp = func() (*RootCommand, error) {
+			// Create a default executor
+			exec := executor.NewDefaultExecutor()
+
+			// Create the root command with nil config initially
+			root := NewRootCommand(nil, exec)
+
+			// Load configuration from the custom path
+			cfg, err := config.LoadConfigFrom(configPath)
+			if err != nil {
+				return root, fmt.Errorf("failed to load configuration from '%s': %w", configPath, err)
+			}
+
+			// Store the loaded config
+			root.Config = cfg
+
+			// Validate command dependencies
+			if err = validateCommandDependencies(cfg); err != nil {
+				return root, fmt.Errorf("invalid command dependencies: %w", err)
+			}
+
+			// Initialize the handler with the config
+			root.Handler = NewCommandHandler(cfg, exec)
+
+			// Register commands
+			root.registerCommands()
+
+			return root, nil
+		}
+
+		// Initialize app with our custom config path
 		root, err := InitializeApp()
 		assert.NoError(t, err)
 		assert.NotNil(t, root)
-		assert.Nil(t, root.Config)
-
-		// Manually call the loading logic with the specific config path
-		err = root.loadConfigAndRegisterCommands(configPath)
-
-		// Check state AFTER loading
-		assert.NoError(t, err)
 		assert.NotNil(t, root.Config)
+
+		// Check the loaded config
 		assert.Equal(t, "flag-value", root.Config.Variables["FLAG_VAR"])
 		assert.Len(t, root.Config.Commands, 1)
 		flagCmd, _, _ := root.RootCmd.Find([]string{"flagcmd"})

@@ -10,6 +10,11 @@ import (
 // validateCommandDependencies validates that there are no circular dependencies
 // in the command configuration
 func validateCommandDependencies(cfg *config.ProjectConfig) error {
+	// Check if config is nil
+	if cfg == nil {
+		return nil // No config, no dependencies to validate
+	}
+
 	// Create a map to track visited commands during traversal
 	visited := make(map[string]bool)
 

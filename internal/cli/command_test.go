@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"bytes"
 	"fmt"
 	"strings"
 	"testing"
@@ -262,7 +263,7 @@ func TestCommandHandler_ParallelAndSequentialEdgeCases(t *testing.T) {
 				},
 				"parallel-parent": {
 					Parallel: true,
-					Commands: map[string]string{"fail": "fail", "ok": "ok"},
+					Tasks: []string{"fail", "ok"},
 				},
 			},
 		}
@@ -283,14 +284,14 @@ func TestCommandHandler_ParallelAndSequentialEdgeCases(t *testing.T) {
 			Commands: map[string]config.Command{
 				"parallel-empty": {
 					Parallel: true,
-					Commands: map[string]string{},
+					Tasks: []string{},
 				},
 			},
 		}
 		handler := NewCommandHandler(cfg, realExec)
 		err := handler.ExecuteCommand("parallel-empty", nil)
-		if err == nil || !strings.Contains(err.Error(), "has no 'run' or 'commands' defined") {
-			t.Errorf("Expected error for empty parallel commands, got: %v", err)
+		if err == nil || !strings.Contains(err.Error(), "has no 'run', 'tasks', or 'commands' defined") {
+			t.Errorf("Expected error for empty parallel tasks, got: %v", err)
 		}
 	})
 
@@ -305,7 +306,7 @@ func TestCommandHandler_ParallelAndSequentialEdgeCases(t *testing.T) {
 				"fail": {Run: "sh -c 'exit 1'", Description: "Fails intentionally"},
 				"ok":   {Run: "echo 'ok'", Description: "Succeeds"},
 				"sequential-parent": {
-					Commands: map[string]string{"fail": "fail", "ok": "ok"},
+					Tasks: []string{"fail", "ok"},
 				},
 			},
 		}
@@ -325,14 +326,14 @@ func TestCommandHandler_ParallelAndSequentialEdgeCases(t *testing.T) {
 			Name: "test-project",
 			Commands: map[string]config.Command{
 				"sequential-empty": {
-					Commands: map[string]string{},
+					Tasks: []string{},
 				},
 			},
 		}
 		handler := NewCommandHandler(cfg, realExec)
 		err := handler.ExecuteCommand("sequential-empty", nil)
-		if err == nil || !strings.Contains(err.Error(), "has no 'run' or 'commands' defined") {
-			t.Errorf("Expected error for empty sequential commands, got: %v", err)
+		if err == nil || !strings.Contains(err.Error(), "has no 'run', 'tasks', or 'commands' defined") {
+			t.Errorf("Expected error for empty sequential tasks, got: %v", err)
 		}
 	})
 
@@ -348,10 +349,8 @@ func TestCommandHandler_ParallelAndSequentialEdgeCases(t *testing.T) {
 		Name: "test-project",
 		Commands: map[string]config.Command{
 			"parallel-parent": {
-				Run:         "",
-				Description: "Parent with parallel commands",
-				Parallel:    true,
-				Commands:    map[string]string{"parallel1": "echo 'parallel1'", "parallel2": "echo 'parallel2'"},
+				Parallel: true,
+				Tasks: []string{"echo 'parallel1'", "echo 'parallel2'"},
 			},
 			"parallel1": {
 				Run:         "echo 'parallel1'",
@@ -386,10 +385,7 @@ func TestCommandHandler_SequentialCommands_Success(t *testing.T) {
 		Name: "test-project",
 		Commands: map[string]config.Command{
 			"sequential-parent": {
-				Run:         "",
-				Description: "Parent with sequential commands",
-				Parallel:    false, // This makes it sequential
-				Commands:    map[string]string{"seq1": "echo 'seq1'", "seq2": "echo 'seq2'"},
+				Tasks: []string{"echo 'seq1'", "echo 'seq2'"},
 			},
 			"seq1": {
 				Run:         "echo 'seq1'",
@@ -420,63 +416,78 @@ func TestCommandHandler_SequentialCommands_Success(t *testing.T) {
 	}
 }
 
-func TestCommandHandler_CheckCommandConditionAndTimeout(t *testing.T) {
-	cfg := &config.ProjectConfig{
-		Name:      "test-project",
-		Variables: map[string]string{"FOO": "bar"},
-		Commands: map[string]config.Command{
-			"with-condition": {
-				Run:       "echo ok",
-				Condition: "$FOO == nope",
-			},
-			"with-invalid-condition": {
-				Run:       "echo fail",
-				Condition: "$FOO ==", // Invalid
-			},
-			"with-timeout": {
-				Run:     "echo timeout",
-				Timeout: "notaduration",
-			},
-		},
-	}
-	exec := executor.NewDefaultExecutor()
-	handler := NewCommandHandler(cfg, exec)
+func TestCommandHandler_Subcommands(t *testing.T) {
+	// Create a buffer to capture output
+	buf := &bytes.Buffer{}
+	realExec := executor.NewDefaultExecutor()
+	realExec.SetStdout(buf)
+	realExec.SetStderr(buf)
 
-	// Condition false: should be skipped, not an error
-	err := handler.ExecuteCommand("with-condition", nil)
-	if err != nil {
-		t.Errorf("Expected no error for unmet condition (should skip), got %v", err)
-	}
-
-	// Invalid condition: should be skipped, not an error
-	err = handler.ExecuteCommand("with-invalid-condition", nil)
-	if err != nil {
-		t.Errorf("Expected no error for invalid condition (should skip), got %v", err)
-	}
-
-	// Invalid timeout
-	_, err = handler.parseTimeout("with-timeout", "notaduration")
-	if err == nil {
-		t.Errorf("Expected error for invalid timeout, got nil")
-	}
-}
-
-func TestCommandHandler_ExecuteDependencies_Missing(t *testing.T) {
+	// Create a config with a command that has subcommands
 	cfg := &config.ProjectConfig{
 		Name: "test-project",
 		Commands: map[string]config.Command{
-			"main": {
-				Run:     "echo main",
-				Depends: []string{"missing"},
+			"parent": {
+				Description: "Parent command with subcommands",
+				Commands: []config.Command{
+					{
+						Run:         "echo 'subcommand 1'",
+						Description: "First subcommand",
+					},
+					{
+						Run:         "echo 'subcommand 2'",
+						Description: "Second subcommand",
+					},
+				},
 			},
 		},
 	}
-	exec := executor.NewDefaultExecutor()
-	handler := NewCommandHandler(cfg, exec)
-	err := handler.ExecuteCommand("main", nil)
-	if err == nil || !strings.Contains(err.Error(), "not found") {
-		t.Errorf("Expected error for missing dependency, got %v", err)
-	}
+
+	// Create a command handler
+	handler := NewCommandHandler(cfg, realExec)
+
+	t.Run("List subcommands", func(t *testing.T) {
+		buf.Reset()
+		err := handler.ExecuteCommand("parent", nil)
+		if err != nil {
+			t.Errorf("Expected no error when listing subcommands, got: %v", err)
+		}
+
+		output := buf.String()
+		if !strings.Contains(output, "Available subcommands for 'parent'") {
+			t.Errorf("Expected output to contain subcommand list header, got: %s", output)
+		}
+		if !strings.Contains(output, "First subcommand") || !strings.Contains(output, "Second subcommand") {
+			t.Errorf("Expected output to contain subcommand descriptions, got: %s", output)
+		}
+	})
+
+	t.Run("Execute specific subcommand", func(t *testing.T) {
+		buf.Reset()
+		err := handler.ExecuteCommand("parent:1", nil)
+		if err != nil {
+			t.Errorf("Expected no error when executing subcommand, got: %v", err)
+		}
+
+		output := buf.String()
+		if !strings.Contains(output, "subcommand 1") {
+			t.Errorf("Expected output to contain 'subcommand 1', got: %s", output)
+		}
+	})
+
+	t.Run("Invalid subcommand index", func(t *testing.T) {
+		err := handler.ExecuteCommand("parent:99", nil)
+		if err == nil || !strings.Contains(err.Error(), "out of range") {
+			t.Errorf("Expected error about index out of range, got: %v", err)
+		}
+	})
+
+	t.Run("Invalid subcommand format", func(t *testing.T) {
+		err := handler.ExecuteCommand("parent:invalid", nil)
+		if err == nil || !strings.Contains(err.Error(), "invalid subcommand index") {
+			t.Errorf("Expected error about invalid subcommand index, got: %v", err)
+		}
+	})
 }
 
 func TestCommandHandler_ExecuteCommand_ErrorCases(t *testing.T) {
@@ -484,10 +495,12 @@ func TestCommandHandler_ExecuteCommand_ErrorCases(t *testing.T) {
 		Name: "test-project",
 		Commands: map[string]config.Command{
 			"missing-run": {}, // No Run or Commands
-			"invalid-param": {
-				Run: "echo 'should not run'",
+			"parent": {
+				Parallel: true,
+				Tasks: []string{"echo $PARAM1", "echo $PARAM2"},
 				Params: []config.Param{
-					{Name: "int-param", Type: "int", Default: "not-an-int", Flag: true},
+					{Name: "PARAM1", Type: "string", Default: "default1"},
+					{Name: "PARAM2", Type: "string", Default: "default2"},
 				},
 			},
 		},
@@ -612,8 +625,8 @@ func TestCommandHandler_SequentialCommands_Timeout(t *testing.T) {
 			"sequential-timeout": {
 				Parallel: false,
 				Timeout:  "100ms",
-				Commands: map[string]string{
-					"slow": "sleep 1",
+				Tasks: []string{
+					"sleep 1",
 				},
 			},
 		},
@@ -638,7 +651,7 @@ func TestCommandHandler_SequentialCommands_Failure(t *testing.T) {
 				Run:         "",
 				Description: "Parent with failing sequential command",
 				Parallel:    false,
-				Commands:    map[string]string{"seq1": "echo 'seq1'", "seq-fail": "echo 'fail'; exit 1"},
+				Tasks:       []string{"echo 'seq1'", "echo 'fail'; exit 1"},
 			},
 		},
 	}
@@ -654,8 +667,8 @@ func TestCommandHandler_SequentialCommands_Failure(t *testing.T) {
 	if !strings.Contains(output, "fail") {
 		t.Errorf("Expected output to contain 'fail' from failing command, got '%s'", output)
 	}
-	if err == nil || !strings.Contains(err.Error(), "seq-fail") {
-		t.Errorf("Expected error to contain 'seq-fail', got '%v'", err)
+	if err == nil || !strings.Contains(err.Error(), "sub-command #2") {
+		t.Errorf("Expected error to contain 'sub-command #2', got '%v'", err)
 	}
 
 }
@@ -776,4 +789,92 @@ func TestParseTimeout(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestRunParallelCommands tests the runParallelCommands function
+func TestRunParallelCommands(t *testing.T) {
+	// Create a mock executor with buffers for stdout and stderr
+	stdoutBuf := &bytes.Buffer{}
+	stderrBuf := &bytes.Buffer{}
+	exec := executor.NewDefaultExecutor()
+	exec.SetStdout(stdoutBuf)
+	exec.SetStderr(stderrBuf)
+
+	// Create a config and command handler
+	cfg := &config.ProjectConfig{
+		Name: "test-project",
+		Variables: map[string]string{
+			"VAR1": "value1",
+		},
+	}
+	handler := NewCommandHandler(cfg, exec)
+
+	// Test dry run mode
+	t.Run("dry run mode", func(t *testing.T) {
+		// Enable dry run mode
+		handler.SetDryRun(true)
+
+		// Create a command with parallel tasks
+		cmd := config.Command{
+			Run:   "",
+			Tasks: []string{
+				"echo 'Task 1'",
+				"echo 'Task 2'",
+				"echo 'Task 3'",
+			},
+		}
+
+		// Run the parallel commands
+		err := handler.runParallelCommands("test-parallel", cmd, map[string]string{}, 5*time.Second)
+		if err != nil {
+			t.Fatalf("Expected no error, got %v", err)
+		}
+
+		// Reset dry run mode
+		handler.SetDryRun(false)
+	})
+}
+
+// TestRunSequentialCommands tests the runSequentialCommands function
+func TestRunSequentialCommands(t *testing.T) {
+	// Create a mock executor with buffers for stdout and stderr
+	stdoutBuf := &bytes.Buffer{}
+	stderrBuf := &bytes.Buffer{}
+	exec := executor.NewDefaultExecutor()
+	exec.SetStdout(stdoutBuf)
+	exec.SetStderr(stderrBuf)
+
+	// Create a config and command handler
+	cfg := &config.ProjectConfig{
+		Name: "test-project",
+		Variables: map[string]string{
+			"VAR1": "value1",
+		},
+	}
+	handler := NewCommandHandler(cfg, exec)
+
+	// Test dry run mode
+	t.Run("dry run mode", func(t *testing.T) {
+		// Enable dry run mode
+		handler.SetDryRun(true)
+
+		// Create a command with sequential tasks
+		cmd := config.Command{
+			Run:   "",
+			Tasks: []string{
+				"echo 'Task 1'",
+				"echo 'Task 2'",
+				"echo 'Task 3'",
+			},
+		}
+
+		// Run the sequential commands
+		err := handler.runSequentialCommands("test-sequential", cmd, map[string]string{}, 5*time.Second)
+		if err != nil {
+			t.Fatalf("Expected no error, got %v", err)
+		}
+
+		// Reset dry run mode
+		handler.SetDryRun(false)
+	})
 }

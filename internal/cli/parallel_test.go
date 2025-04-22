@@ -111,9 +111,9 @@ func TestExecuteParallelCommands_Timeout(t *testing.T) {
 			"parallel-timeout": {
 				Parallel: true,
 				Timeout:  "100ms",
-				Commands: map[string]string{
-					"slow1": "sleep 1",
-					"slow2": "sleep 1",
+				Tasks: []string{
+					"sleep 1",
+					"sleep 1",
 				},
 			},
 		},
@@ -150,10 +150,10 @@ func TestExecuteParallelCommands(t *testing.T) {
 
 		// Create a command with parallel sub-commands
 		cmd := config.Command{
-			Commands: map[string]string{
-				"cmd1": "echo $VAR1",
-				"cmd2": "echo $VAR2",
-				"cmd3": "echo test",
+			Tasks: []string{
+				"echo $VAR1",
+				"echo $VAR2",
+				"echo test",
 			},
 			Parallel: true,
 		}
@@ -190,10 +190,10 @@ func TestExecuteParallelCommands(t *testing.T) {
 
 		// Create a command with parallel sub-commands, one of which will fail
 		cmd := config.Command{
-			Commands: map[string]string{
-				"cmd1": "echo success1",
-				"cmd2": "false",
-				"cmd3": "echo success2",
+			Tasks: []string{
+				"echo success1",
+				"false",
+				"echo success2",
 			},
 			Parallel: true,
 		}
@@ -204,7 +204,7 @@ func TestExecuteParallelCommands(t *testing.T) {
 		// Should return an error
 		assert.Error(t, err)
 		assert.Contains(t, err.Error(), "one or more parallel commands failed")
-		assert.Contains(t, err.Error(), "sub-command 'cmd2' for 'test-parallel-errors' failed")
+		assert.Contains(t, err.Error(), "sub-command #2 for 'test-parallel-errors' failed")
 
 		// Note: Output from parallel commands may not be in order or may be missing if a command fails early.
 		output := buf.String()
@@ -238,10 +238,10 @@ func TestExecuteParallelCommands(t *testing.T) {
 
 		// Create a command with parallel sub-commands, one of which is slow
 		cmd := config.Command{
-			Commands: map[string]string{
-				"cmd1": "echo quick1",
-				"cmd2": "sleep 2",
-				"cmd3": "echo quick2",
+			Tasks: []string{
+				"echo quick1",
+				"sleep 2",
+				"echo quick2",
 			},
 			Parallel: true,
 		}
