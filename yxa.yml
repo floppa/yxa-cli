@@ -17,6 +17,10 @@ commands:
     run: go test -v -race ./...
     description: Run all tests with race detection
 
+  integration:
+    run: bats tests/integration
+    description: Run all integration tests
+
   # Clean build artifacts
   clean:
     run: rm -f ${BINARY_NAME} && rm -rf ${DIST_DIR}
@@ -209,11 +213,14 @@ commands:
   subcommands-test:
     description: Demo of subcommands
     commands:
-      - run: echo "Hello from subcommand 1"
+      subcommand1:
+        run: echo "Hello from subcommand 1"
         description: Says hello
-      - run: echo "Goodbye from subcommand 2"
+      subcommand2:
+        run: echo "Goodbye from subcommand 2"
         description: Says goodbye
-      - tasks:
+      subcommand3:
+        tasks:
           - echo "This is task 1 in subcommand 3"
           - echo "This is task 2 in subcommand 3"
         description: Runs multiple tasks

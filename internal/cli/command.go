@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"strconv"
 	"strings"
 	"time"
 
@@ -42,14 +41,11 @@ func (h *CommandHandler) ExecuteCommand(cmdName string, cmdVars map[string]strin
 	// Mark the command as executed
 	h.executedCmds[cmdName] = true
 
-	// Check if this is a subcommand reference (format: parent:index)
+	// Check if this is a subcommand reference (format: parent:subcommandname)
 	parts := strings.Split(cmdName, ":")
 	if len(parts) > 1 {
 		parentName := parts[0]
-		subCmdIndex, err := strconv.Atoi(parts[1])
-		if err != nil {
-			return fmt.Errorf("invalid subcommand index in '%s': %w", cmdName, err)
-		}
+		subCmdName := parts[1]
 
 		// Get the parent command
 		parentCmd, ok := h.Config.Commands[parentName]
@@ -57,14 +53,11 @@ func (h *CommandHandler) ExecuteCommand(cmdName string, cmdVars map[string]strin
 			return fmt.Errorf("parent command '%s' not found", parentName)
 		}
 
-		// Check if the subcommand index is valid
-		if subCmdIndex < 1 || subCmdIndex > len(parentCmd.Commands) {
-			return fmt.Errorf("subcommand index %d out of range for command '%s' (valid range: 1-%d)", 
-				subCmdIndex, parentName, len(parentCmd.Commands))
+		// Get the subcommand by name
+		subCmd, ok := parentCmd.Commands[subCmdName]
+		if !ok {
+			return fmt.Errorf("subcommand '%s' not found in command '%s'", subCmdName, parentName)
 		}
-
-		// Get the subcommand (adjusting for 1-based indexing in the UI)
-		subCmd := parentCmd.Commands[subCmdIndex-1]
 
 		// Execute the subcommand
 		return h.executeCommandWithDependencies(cmdName, subCmd, cmdVars)
@@ -130,32 +123,53 @@ func (h *CommandHandler) checkCommandCondition(cmdName string, cmd config.Comman
 }
 
 // executeDependencies executes all dependencies for a command
+// executeDependencies executes all dependencies for a command
 func (h *CommandHandler) executeDependencies(cmdName string, dependencies []string, cmdVars map[string]string) error {
-	// Special handling for check-all command to continue execution even if dependencies fail
-	if cmdName == "check-all" {
-		var errors []string
-		for _, dep := range dependencies {
-			// Don't print the execution message here, it will be printed in runMainCommand
-			if err := h.ExecuteCommand(dep, cmdVars); err != nil {
-				// Log the error but continue with other dependencies
-				fmt.Printf("Error executing command '%s': %v\n", dep, err)
-				errors = append(errors, fmt.Sprintf("'%s': %v", dep, err))
-			}
-		}
-		
-		// Return a combined error if any dependencies failed
-		if len(errors) > 0 {
-			return fmt.Errorf("one or more dependencies failed: %s", strings.Join(errors, "; "))
-		}
+	// If there are no dependencies, return immediately
+	if len(dependencies) == 0 {
 		return nil
 	}
-	
+
+	// Special handling for check-all command
+	if cmdName == "check-all" {
+		return h.executeCheckAllDependencies(dependencies, cmdVars)
+	}
+
 	// Standard behavior for other commands
+	return h.executeStandardDependencies(cmdName, dependencies, cmdVars)
+}
+
+// executeCheckAllDependencies executes dependencies for the check-all command,
+// continuing execution even if some dependencies fail
+func (h *CommandHandler) executeCheckAllDependencies(dependencies []string, cmdVars map[string]string) error {
+	var errors []string
+
+	for _, dep := range dependencies {
+		// Don't print the execution message here, it will be printed in runMainCommand
+		if err := h.ExecuteCommand(dep, cmdVars); err != nil {
+			// Log the error but continue with other dependencies
+			fmt.Printf("Error executing command '%s': %v\n", dep, err)
+			errors = append(errors, fmt.Sprintf("'%s': %v", dep, err))
+		}
+	}
+
+	// Return a combined error if any dependencies failed
+	if len(errors) > 0 {
+		return fmt.Errorf("one or more dependencies failed: %s", strings.Join(errors, "; "))
+	}
+
+	return nil
+}
+
+// executeStandardDependencies executes dependencies for standard commands,
+// stopping at the first failure
+func (h *CommandHandler) executeStandardDependencies(cmdName string, dependencies []string, cmdVars map[string]string) error {
 	for _, dep := range dependencies {
 		if err := h.ExecuteCommand(dep, cmdVars); err != nil {
 			return fmt.Errorf("failed to execute dependency '%s' for command '%s': %w", dep, cmdName, err)
 		}
 	}
+
 	return nil
 }
 
@@ -296,20 +310,20 @@ func (h *CommandHandler) replaceVariablesInString(input string, vars map[string]
 // listSubcommands lists all subcommands of a command
 func (h *CommandHandler) listSubcommands(cmdName string, cmd config.Command) error {
 	stdout := h.Executor.GetStdout()
-	
+
 	// Print header and description
 	_, err := fmt.Fprintf(stdout, "Available subcommands for '%s':\n", cmdName)
 	if err != nil {
 		return fmt.Errorf("failed to write to stdout: %w", err)
 	}
-	
+
 	if cmd.Description != "" {
 		_, err := fmt.Fprintf(stdout, "Description: %s\n", cmd.Description)
 		if err != nil {
 			return fmt.Errorf("failed to write to stdout: %w", err)
 		}
 	}
-	
+
 	_, err = fmt.Fprintln(stdout)
 	if err != nil {
 		return fmt.Errorf("failed to write to stdout: %w", err)
@@ -317,16 +331,14 @@ func (h *CommandHandler) listSubcommands(cmdName string, cmd config.Command) err
 
 	// Get the maximum length of subcommand names for alignment
 	maxLen := 0
-	for i := range cmd.Commands {
-		subCmdName := fmt.Sprintf("%s:%d", cmdName, i+1)
+	for subCmdName := range cmd.Commands {
 		if len(subCmdName) > maxLen {
 			maxLen = len(subCmdName)
 		}
 	}
 
 	// List all subcommands with their descriptions
-	for i, subCmd := range cmd.Commands {
-		subCmdName := fmt.Sprintf("%s:%d", cmdName, i+1)
+	for subCmdName, subCmd := range cmd.Commands {
 		description := subCmd.Description
 		if description == "" {
 			if subCmd.Run != "" {
@@ -335,7 +347,7 @@ func (h *CommandHandler) listSubcommands(cmdName string, cmd config.Command) err
 				description = "(No description)"
 			}
 		}
-		
+
 		_, err := fmt.Fprintf(stdout, "  %-*s  %s\n", maxLen, subCmdName, description)
 		if err != nil {
 			return fmt.Errorf("failed to write to stdout: %w", err)

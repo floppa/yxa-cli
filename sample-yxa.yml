@@ -61,18 +61,20 @@ commands:
     description: Executes tasks in parallel
 
   # Command with subcommands
-  subcommands:
+  subcommands-test:
     description: Demo of subcommands
     commands:
-      - run: echo "Hello from subcommand 1"
+      subcommand1:
         description: Says hello
-      - run: echo "Goodbye from subcommand 2"
+        run: echo "Hello from subcommand 1"
+      subcommand2:
         description: Says goodbye
-      - tasks:
+        run: echo "Goodbye from subcommand 2"
+      subcommand3:
+        description: Runs multiple tasks
+        tasks:
           - echo "This is task 1 in subcommand 3"
           - echo "This is task 2 in subcommand 3"
-        description: Runs multiple tasks
-
   # Command with sequential execution
   sequential-parent:
     run: echo "Starting sequential execution"

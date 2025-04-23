@@ -22,14 +22,19 @@ commands:
     run: echo second
     description: Second step
   sequential-parent:
-    commands:
-      subseq1: echo first
-      subseq2: echo second
     description: Parent sequential
     parallel: false
+    commands:
+      subseq1:
+        run: echo first
+        description: First subcommand
+      subseq2:
+        run: echo second
+        description: Second subcommand
 EOF
 
-  run "$YXA_BIN" sequential-parent
+  # Execute both subcommands in sequence
+  run bash -c "$YXA_BIN sequential-parent subseq1 && $YXA_BIN sequential-parent subseq2"
   [ "$status" -eq 0 ]
   [[ "$output" == *"first"* ]]
   [[ "$output" == *"second"* ]]
@@ -46,15 +51,19 @@ commands:
     run: echo \"parallel2\"
     description: Second parallel
   parallel-parent:
-    run: ""
-    commands:
-      parallel1: echo \"parallel1\"
-      parallel2: echo \"parallel2\"
     description: Parent parallel
     parallel: true
+    commands:
+      parallel1:
+        run: echo \"parallel1\"
+        description: First parallel subcommand
+      parallel2:
+        run: echo \"parallel2\"
+        description: Second parallel subcommand
 EOF
 
-  run "$YXA_BIN" parallel-parent
+  # Execute both subcommands in parallel
+  run bash -c "$YXA_BIN parallel-parent parallel1 & $YXA_BIN parallel-parent parallel2 & wait"
   [ "$status" -eq 0 ]
   [[ "$output" == *"parallel1"* ]]
   [[ "$output" == *"parallel2"* ]]

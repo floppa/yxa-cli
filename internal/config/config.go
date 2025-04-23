@@ -24,18 +24,18 @@ type ProjectConfig struct {
 
 // Command represents a command defined in the project.yml file
 type Command struct {
-	Run         string            `yaml:"run"`                   // Main command to execute
-	Tasks       []string          `yaml:"tasks,omitempty"`       // Multiple tasks for parallel or sequential execution
-	Commands    []Command         `yaml:"commands,omitempty"`    // Subcommands for hierarchical command structures
-	Depends     []string          `yaml:"depends,omitempty"`     // Dependencies to execute first
-	Description string            `yaml:"description,omitempty"` // Command description
-	Condition   string            `yaml:"condition,omitempty"`   // Condition to evaluate before running
-	Pre         string            `yaml:"pre,omitempty"`         // Command to run before the main command
-	Post        string            `yaml:"post,omitempty"`        // Command to run after the main command
-	Timeout     string            `yaml:"timeout,omitempty"`     // Timeout for command execution (e.g. "30s", "5m")
-	Parallel    bool              `yaml:"parallel,omitempty"`    // Whether to run tasks in parallel
-	Params      []Param           `yaml:"params,omitempty"`      // Command parameters (flags and positional)
-	WorkingDir  string            `yaml:"workingdir,omitempty"`  // Command-level workingdir
+	Run         string                  `yaml:"run"`                   // Main command to execute
+	Tasks       []string                `yaml:"tasks,omitempty"`       // Multiple tasks for parallel or sequential execution
+	Commands    map[string]Command      `yaml:"commands,omitempty"`    // Named subcommands for hierarchical command structures
+	Depends     []string                `yaml:"depends,omitempty"`     // Dependencies to execute first
+	Description string                  `yaml:"description,omitempty"` // Command description
+	Condition   string                  `yaml:"condition,omitempty"`   // Condition to evaluate before running
+	Pre         string                  `yaml:"pre,omitempty"`         // Command to run before the main command
+	Post        string                  `yaml:"post,omitempty"`        // Command to run after the main command
+	Timeout     string                  `yaml:"timeout,omitempty"`     // Timeout for command execution (e.g. "30s", "5m")
+	Parallel    bool                    `yaml:"parallel,omitempty"`    // Whether to run tasks in parallel
+	Params      []Param                 `yaml:"params,omitempty"`      // Command parameters (flags and positional)
+	WorkingDir  string                  `yaml:"workingdir,omitempty"`  // Command-level workingdir
 }
 
 // LoadConfig loads the project configuration from the yxa.yml file (legacy, cwd)

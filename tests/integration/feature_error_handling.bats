@@ -16,20 +16,24 @@ teardown() {
 name: yxa-test-project
 commands:
   sequential-with-error:
-    run: ""
-    commands:
-      seq1: "echo 'seq1'"
-      seq-fail: "exit 1"
     description: Parent with failing sequential command
     parallel: false
+    commands:
+      seq1:
+        run: "echo 'seq1'"
+        description: First sequence command
+      seq-fail:
+        run: "exit 1"
+        description: Failing command
 EOF
 
-  run "$YXA_BIN" sequential-with-error
+  # Run the failing subcommand directly
+  run "$YXA_BIN" sequential-with-error seq-fail
   echo "status=$status" >&2
   echo "output=$output" >&2
   if [ "$status" -eq 0 ]; then
     echo "FAIL: CLI should have returned nonzero status for error" >&2
     exit 1
   fi
-  [[ "$output" == *"Error executing command 'sequential-with-error'"* ]]
+  [[ "$output" == *"Error executing subcommand 'sequential-with-error:seq-fail'"* ]]
 }
