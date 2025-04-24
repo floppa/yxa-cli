@@ -28,7 +28,7 @@ See the docs: https://floppa.github.io/yxa-cli
 This will just download and install the latest binary.
 
 ```bash
-curl -sL https://raw.githubusercontent.com/floppa/yxa-install/main/install.sh | bash
+curl -sL https://raw.githubusercontent.com/floppa/yxa-cli/main/install.sh | bash
 ```
 
 For other alternatives, see docs.

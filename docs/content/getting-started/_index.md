@@ -10,7 +10,7 @@ weight: 1
 This will just download and install the latest binary from releases.
 
 ```bash
-curl -sL https://raw.githubusercontent.com/floppa/yxa-install/main/install.sh | bash
+curl -sL https://raw.githubusercontent.com/floppa/yxa-cli/main/install.sh | bash
 ```
 
 Please note: Windows is not supported by this script.
