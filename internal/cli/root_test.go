@@ -292,7 +292,9 @@ commands:
 
 	// Return cleanup function
 	cleanup := func() {
-		os.RemoveAll(tmpDir)
+		if err := os.RemoveAll(tmpDir); err != nil {
+			fmt.Fprintf(os.Stderr, "Warning: Failed to clean up temporary directory: %v\n", err)
+		}
 	}
 
 	return tmpDir, configPath, cleanup
@@ -372,7 +374,11 @@ func testLoadConfigFromCurrentDirectory(t *testing.T) {
 	if err := os.Chdir(tmpDir); err != nil {
 		t.Fatalf("Failed to change directory: %v", err)
 	}
-	defer os.Chdir(currentDir) // Restore original directory
+	defer func() {
+		if err := os.Chdir(currentDir); err != nil {
+			t.Logf("Warning: Failed to restore original directory: %v", err)
+		}
+	}() // Restore original directory
 
 	// Create a new root command with nil config
 	exec := executor.NewDefaultExecutor()
@@ -463,7 +469,9 @@ func captureCommandOutput(t *testing.T, cmd *cobra.Command, args []string) strin
 	assert.NoError(t, err)
 	
 	// Restore stdout and read captured output
-	w.Close()
+	if err := w.Close(); err != nil {
+		t.Logf("Warning: Failed to close pipe writer: %v", err)
+	}
 	os.Stdout = oldStdout
 	outputBytes, _ := io.ReadAll(r)
 	

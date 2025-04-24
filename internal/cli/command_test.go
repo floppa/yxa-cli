@@ -14,6 +14,8 @@ import (
 )
 
 // testExecutor is a simple executor that returns predefined results for commands
+// testExecutor is a mock executor for testing
+//nolint:unused // Used in tests
 type testExecutor struct {
 	stdout         io.Writer
 	stderr         io.Writer
@@ -21,11 +23,15 @@ type testExecutor struct {
 	mutex          sync.Mutex
 }
 
+//nolint:unused // Used in tests
 func (e *testExecutor) Execute(command string, timeout time.Duration) error {
 	e.mutex.Lock()
 	defer e.mutex.Unlock()
 	
-	fmt.Fprintf(e.stdout, "Executing command '%s'...\n", command)
+	_, err := fmt.Fprintf(e.stdout, "Executing command '%s'...\n", command)
+	if err != nil {
+		return fmt.Errorf("failed to write to stdout: %w", err)
+	}
 	
 	if err, ok := e.commandResults[command]; ok {
 		return err
@@ -35,11 +41,15 @@ func (e *testExecutor) Execute(command string, timeout time.Duration) error {
 	return nil
 }
 
+//nolint:unused // Used in tests
 func (e *testExecutor) ExecuteWithOutput(command string, timeout time.Duration) (string, error) {
 	e.mutex.Lock()
 	defer e.mutex.Unlock()
 	
-	fmt.Fprintf(e.stdout, "Executing command '%s'...\n", command)
+	_, err := fmt.Fprintf(e.stdout, "Executing command '%s'...\n", command)
+	if err != nil {
+		return "", fmt.Errorf("failed to write to stdout: %w", err)
+	}
 	
 	if err, ok := e.commandResults[command]; ok {
 		return "", err
@@ -49,18 +59,22 @@ func (e *testExecutor) ExecuteWithOutput(command string, timeout time.Duration) 
 	return "", nil
 }
 
+//nolint:unused // Used in tests
 func (e *testExecutor) SetStdout(w io.Writer) {
 	e.stdout = w
 }
 
+//nolint:unused // Used in tests
 func (e *testExecutor) SetStderr(w io.Writer) {
 	e.stderr = w
 }
 
+//nolint:unused // Used in tests
 func (e *testExecutor) GetStdout() io.Writer {
 	return e.stdout
 }
 
+//nolint:unused // Used in tests
 func (e *testExecutor) GetStderr() io.Writer {
 	return e.stderr
 }
@@ -883,12 +897,15 @@ func TestParseTimeout(t *testing.T) {
 }
 
 // mockCommandHandler is a custom mock for testing the executeDependencies method
+// mockCommandHandler is a mock command handler for testing
+//nolint:unused // Used in tests
 type mockCommandHandler struct {
 	CommandHandler
 	executeResults map[string]error
 }
 
 // Override ExecuteCommand to return predefined results
+//nolint:unused // Used in tests
 func (m *mockCommandHandler) ExecuteCommand(cmdName string, cmdVars map[string]string) error {
 	// For the test cases, we want to simulate the actual command execution
 	// by returning the predefined results for the dependency commands
