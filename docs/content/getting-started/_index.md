@@ -5,13 +5,27 @@ weight: 1
 
 ## Installation
 
+### Usign bash-wrapper
+
+This will just download and install the latest binary from releases.
+
+```bash
+curl -sL https://raw.githubusercontent.com/floppa/yxa-install/main/install.sh | bash
+```
+
+Please note: Windows is not supported by this script.
+
 ### Using Go Install
 
 ```bash
 go install github.com/floppa/yxa-cli@latest
 ```
 
-### Download from releases
+Please note: That only running this command will give you "yxa-cli" instead of yxa
+That can be fixed by renaming the binary.
+
+
+### Download from release
 
 #### Linux (amd64)
 
