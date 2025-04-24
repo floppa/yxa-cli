@@ -23,10 +23,12 @@ See the docs: https://floppa.github.io/yxa-cli
 
 ## Installation
 
-### Using Go Install
+### Install through bash
+
+This will just download and install the latest binary.
 
 ```bash
-go install github.com/floppa/yxa-cli@latest
+curl -sL https://raw.githubusercontent.com/floppa/yxa-install/main/install.sh | bash
 ```
 
 For other alternatives, see docs.

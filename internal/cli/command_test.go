@@ -470,7 +470,8 @@ func TestCommandHandler_SequentialCommands_Success(t *testing.T) {
 	}
 }
 
-func TestCommandHandler_Subcommands(t *testing.T) {
+// setupSubcommandTest creates a test environment for subcommand tests
+func setupSubcommandTest(t *testing.T) (*CommandHandler, *bytes.Buffer) {
 	// Create a buffer to capture output
 	buf := &bytes.Buffer{}
 	realExec := executor.NewDefaultExecutor()
@@ -500,48 +501,84 @@ func TestCommandHandler_Subcommands(t *testing.T) {
 	// Create a command handler
 	handler := NewCommandHandler(cfg, realExec)
 
-	t.Run("List subcommands", func(t *testing.T) {
-		buf.Reset()
-		err := handler.ExecuteCommand("parent", nil)
-		if err != nil {
-			t.Errorf("Expected no error when listing subcommands, got: %v", err)
-		}
+	return handler, buf
+}
 
-		output := buf.String()
-		if !strings.Contains(output, "Available subcommands for 'parent'") {
-			t.Errorf("Expected output to contain subcommand list header, got: %s", output)
+// assertOutputContains checks if the output contains expected strings
+func assertOutputContains(t *testing.T, output string, expectedStrings ...string) {
+	for _, expected := range expectedStrings {
+		if !strings.Contains(output, expected) {
+			t.Errorf("Expected output to contain '%s', got: %s", expected, output)
 		}
-		if !strings.Contains(output, "First subcommand") || !strings.Contains(output, "Second subcommand") {
-			t.Errorf("Expected output to contain subcommand descriptions, got: %s", output)
-		}
-	})
+	}
+}
 
-	t.Run("Execute specific subcommand", func(t *testing.T) {
-		buf.Reset()
-		err := handler.ExecuteCommand("parent:subcommand1", nil)
-		if err != nil {
-			t.Errorf("Expected no error when executing subcommand, got: %v", err)
-		}
+// assertErrorContains checks if the error contains expected string
+func assertErrorContains(t *testing.T, err error, expected string) {
+	if err == nil {
+		t.Errorf("Expected error containing '%s', got nil", expected)
+		return
+	}
+	
+	if !strings.Contains(err.Error(), expected) {
+		t.Errorf("Expected error to contain '%s', got: %v", expected, err)
+	}
+}
 
-		output := buf.String()
-		if !strings.Contains(output, "subcommand 1") {
-			t.Errorf("Expected output to contain 'subcommand 1', got: %s", output)
-		}
-	})
+// TestCommandHandler_Subcommands tests subcommand functionality
+func TestCommandHandler_Subcommands(t *testing.T) {
+	// Run sub-tests
+	t.Run("ListSubcommands", testListSubcommands)
+	t.Run("ExecuteSpecificSubcommand", testExecuteSpecificSubcommand)
+	t.Run("InvalidSubcommandName", testInvalidSubcommandName)
+	t.Run("InvalidSubcommandFormat", testInvalidSubcommandFormat)
+}
 
-	t.Run("Invalid subcommand name", func(t *testing.T) {
-		err := handler.ExecuteCommand("parent:99", nil)
-		if err == nil || !strings.Contains(err.Error(), "not found in command") {
-			t.Errorf("Expected error about subcommand not found, got: %v", err)
-		}
-	})
+// testListSubcommands tests listing subcommands
+func testListSubcommands(t *testing.T) {
+	handler, buf := setupSubcommandTest(t)
+	buf.Reset()
+	
+	err := handler.ExecuteCommand("parent", nil)
+	if err != nil {
+		t.Errorf("Expected no error when listing subcommands, got: %v", err)
+	}
 
-	t.Run("Invalid subcommand format", func(t *testing.T) {
-		err := handler.ExecuteCommand("parent:invalid", nil)
-		if err == nil || !strings.Contains(err.Error(), "not found in command") {
-			t.Errorf("Expected error about subcommand not found, got: %v", err)
-		}
-	})
+	output := buf.String()
+	assertOutputContains(t, output, 
+		"Available subcommands for 'parent'", 
+		"First subcommand", 
+		"Second subcommand")
+}
+
+// testExecuteSpecificSubcommand tests executing a specific subcommand
+func testExecuteSpecificSubcommand(t *testing.T) {
+	handler, buf := setupSubcommandTest(t)
+	buf.Reset()
+	
+	err := handler.ExecuteCommand("parent:subcommand1", nil)
+	if err != nil {
+		t.Errorf("Expected no error when executing subcommand, got: %v", err)
+	}
+
+	output := buf.String()
+	assertOutputContains(t, output, "subcommand 1")
+}
+
+// testInvalidSubcommandName tests executing a non-existent subcommand
+func testInvalidSubcommandName(t *testing.T) {
+	handler, _ := setupSubcommandTest(t)
+	
+	err := handler.ExecuteCommand("parent:99", nil)
+	assertErrorContains(t, err, "not found in command")
+}
+
+// testInvalidSubcommandFormat tests executing an invalid subcommand format
+func testInvalidSubcommandFormat(t *testing.T) {
+	handler, _ := setupSubcommandTest(t)
+	
+	err := handler.ExecuteCommand("parent:invalid", nil)
+	assertErrorContains(t, err, "not found in command")
 }
 
 func TestCommandHandler_ExecuteCommand_ErrorCases(t *testing.T) {

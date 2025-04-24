@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -94,17 +95,31 @@ func (h *CommandHandler) executeCommandWithDependencies(cmdName string, cmd conf
 		return h.listSubcommands(cmdName, cmd)
 	}
 
-	// If the command has no run or tasks defined, but has dependencies,
-	// it's just a task aggregator, which is fine
-	if cmd.Run == "" && len(cmd.Tasks) == 0 {
-		if len(cmd.Depends) > 0 {
-			return nil
-		}
-		return fmt.Errorf("command '%s' has no 'run', 'tasks', or 'commands' defined", cmdName)
+	// Validate the command and determine if it's executable
+	if err := h.validateCommandExecutability(cmdName, cmd); err != nil {
+		return err
 	}
 
 	// Execute the command body (pre-hook, main command, post-hook)
 	return h.executeCommandBody(cmdName, cmd, cmdVars)
+}
+
+// validateCommandExecutability checks if a command is executable
+// A command is executable if it has a run command, tasks, or is a dependency aggregator
+func (h *CommandHandler) validateCommandExecutability(cmdName string, cmd config.Command) error {
+	// If the command has no run or tasks defined, but has dependencies,
+	// it's just a task aggregator, which is fine
+	if cmd.Run == "" && len(cmd.Tasks) == 0 {
+		if len(cmd.Depends) > 0 {
+			// This is a valid dependency aggregator
+			return nil
+		}
+		// Command has no functionality defined
+		return fmt.Errorf("command '%s' has no 'run', 'tasks', or 'commands' defined", cmdName)
+	}
+	
+	// Command has either run or tasks defined, so it's executable
+	return nil
 }
 
 // checkCommandCondition evaluates a command's condition if present
@@ -142,6 +157,16 @@ func (h *CommandHandler) executeDependencies(cmdName string, dependencies []stri
 // executeCheckAllDependencies executes dependencies for the check-all command,
 // continuing execution even if some dependencies fail
 func (h *CommandHandler) executeCheckAllDependencies(dependencies []string, cmdVars map[string]string) error {
+	// Execute all dependencies and collect errors
+	errors := h.executeAllDependenciesWithErrorCollection(dependencies, cmdVars)
+
+	// Return a combined error if any dependencies failed
+	return h.formatDependencyErrors(errors)
+}
+
+// executeAllDependenciesWithErrorCollection executes all dependencies and collects errors
+// without stopping on the first error
+func (h *CommandHandler) executeAllDependenciesWithErrorCollection(dependencies []string, cmdVars map[string]string) []string {
 	var errors []string
 
 	for _, dep := range dependencies {
@@ -153,7 +178,12 @@ func (h *CommandHandler) executeCheckAllDependencies(dependencies []string, cmdV
 		}
 	}
 
-	// Return a combined error if any dependencies failed
+	return errors
+}
+
+// formatDependencyErrors formats a list of dependency errors into a single error
+// or returns nil if there are no errors
+func (h *CommandHandler) formatDependencyErrors(errors []string) error {
 	if len(errors) > 0 {
 		return fmt.Errorf("one or more dependencies failed: %s", strings.Join(errors, "; "))
 	}
@@ -164,6 +194,12 @@ func (h *CommandHandler) executeCheckAllDependencies(dependencies []string, cmdV
 // executeStandardDependencies executes dependencies for standard commands,
 // stopping at the first failure
 func (h *CommandHandler) executeStandardDependencies(cmdName string, dependencies []string, cmdVars map[string]string) error {
+	// Execute each dependency, stopping at the first error
+	return h.executeSequentialDependencies(cmdName, dependencies, cmdVars)
+}
+
+// executeSequentialDependencies executes dependencies in sequence and stops at the first error
+func (h *CommandHandler) executeSequentialDependencies(cmdName string, dependencies []string, cmdVars map[string]string) error {
 	for _, dep := range dependencies {
 		if err := h.ExecuteCommand(dep, cmdVars); err != nil {
 			return fmt.Errorf("failed to execute dependency '%s' for command '%s': %w", dep, cmdName, err)
@@ -312,42 +348,60 @@ func (h *CommandHandler) listSubcommands(cmdName string, cmd config.Command) err
 	stdout := h.Executor.GetStdout()
 
 	// Print header and description
+	if err := h.printSubcommandHeader(stdout, cmdName, cmd.Description); err != nil {
+		return err
+	}
+
+	// Get the maximum length of subcommand names for alignment
+	maxLen := h.getMaxSubcommandNameLength(cmd.Commands)
+
+	// List all subcommands with their descriptions
+	return h.printSubcommandList(stdout, cmd.Commands, maxLen)
+}
+
+// printSubcommandHeader prints the header and description for the subcommand list
+func (h *CommandHandler) printSubcommandHeader(stdout io.Writer, cmdName, description string) error {
+	// Print command name header
 	_, err := fmt.Fprintf(stdout, "Available subcommands for '%s':\n", cmdName)
 	if err != nil {
 		return fmt.Errorf("failed to write to stdout: %w", err)
 	}
 
-	if cmd.Description != "" {
-		_, err := fmt.Fprintf(stdout, "Description: %s\n", cmd.Description)
+	// Print description if available
+	if description != "" {
+		_, err := fmt.Fprintf(stdout, "Description: %s\n", description)
 		if err != nil {
 			return fmt.Errorf("failed to write to stdout: %w", err)
 		}
 	}
 
+	// Add a blank line for readability
 	_, err = fmt.Fprintln(stdout)
 	if err != nil {
 		return fmt.Errorf("failed to write to stdout: %w", err)
 	}
 
-	// Get the maximum length of subcommand names for alignment
+	return nil
+}
+
+// getMaxSubcommandNameLength calculates the maximum length of subcommand names for alignment
+func (h *CommandHandler) getMaxSubcommandNameLength(commands map[string]config.Command) int {
 	maxLen := 0
-	for subCmdName := range cmd.Commands {
+	for subCmdName := range commands {
 		if len(subCmdName) > maxLen {
 			maxLen = len(subCmdName)
 		}
 	}
+	return maxLen
+}
 
-	// List all subcommands with their descriptions
-	for subCmdName, subCmd := range cmd.Commands {
-		description := subCmd.Description
-		if description == "" {
-			if subCmd.Run != "" {
-				description = subCmd.Run
-			} else {
-				description = "(No description)"
-			}
-		}
+// printSubcommandList prints the list of subcommands with their descriptions
+func (h *CommandHandler) printSubcommandList(stdout io.Writer, commands map[string]config.Command, maxLen int) error {
+	for subCmdName, subCmd := range commands {
+		// Get the description or fallback to run command or default text
+		description := h.getSubcommandDescription(subCmd)
 
+		// Print the formatted subcommand line
 		_, err := fmt.Fprintf(stdout, "  %-*s  %s\n", maxLen, subCmdName, description)
 		if err != nil {
 			return fmt.Errorf("failed to write to stdout: %w", err)
@@ -355,6 +409,19 @@ func (h *CommandHandler) listSubcommands(cmdName string, cmd config.Command) err
 	}
 
 	return nil
+}
+
+// getSubcommandDescription returns the description for a subcommand, with fallbacks
+func (h *CommandHandler) getSubcommandDescription(cmd config.Command) string {
+	if cmd.Description != "" {
+		return cmd.Description
+	}
+	
+	if cmd.Run != "" {
+		return cmd.Run
+	}
+	
+	return "(No description)"
 }
 
 // executeSequentialCommands executes multiple tasks sequentially

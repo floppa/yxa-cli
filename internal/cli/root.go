@@ -170,122 +170,149 @@ func (r *RootCommand) registerCommands() {
 
 	// Register each command from the configuration
 	for name, cmd := range r.Config.Commands {
-		// Create a local copy of the variables for the closure
-		cmdName := name
-		cmdConfig := cmd
+		// Create a cobra command for this command
+		cobraCmd := r.createCobraCommand(name, cmd)
 
-		// Create a new cobra command
-		cobraCmd := &cobra.Command{
-			Use:   cmdName,
-			Short: cmdConfig.Description,
-			Long:  cmdConfig.Description,
+		// Add parameters and subcommands
+		addParametersToCommand(cobraCmd, cmd.Params)
+		r.addSubcommandsToCommand(cobraCmd, name, cmd.Commands)
+
+		// Add the command to the root command
+		r.RootCmd.AddCommand(cobraCmd)
+	}
+}
+
+// createCobraCommand creates a new cobra.Command for a config.Command
+func (r *RootCommand) createCobraCommand(cmdName string, cmdConfig config.Command) *cobra.Command {
+	// Create a new cobra command
+	return &cobra.Command{
+		Use:   cmdName,
+		Short: cmdConfig.Description,
+		Long:  cmdConfig.Description,
+		Run: func(cmd *cobra.Command, args []string) {
+			// Create command variables and execute the command
+			cmdVars := r.createCommandVariables()
+
+			// Process parameters if defined
+			if len(cmdConfig.Params) > 0 {
+				r.processCommandParameters(cmd, args, cmdConfig.Params, cmdVars)
+			}
+
+			// Check if this command has a subcommand specified
+			if r.tryExecuteSubcommand(cmdName, cmdConfig, args, cmdVars) {
+				return
+			}
+
+			// Execute the main command
+			r.executeMainCommand(cmdName, cmdVars)
+		},
+	}
+}
+
+// createCommandVariables creates a map of variables from the global config
+func (r *RootCommand) createCommandVariables() map[string]string {
+	cmdVars := make(map[string]string)
+	if r.Config != nil {
+		for k, v := range r.Config.Variables {
+			cmdVars[k] = v
+		}
+	}
+	return cmdVars
+}
+
+// processCommandParameters processes command parameters and adds them to the variables map
+func (r *RootCommand) processCommandParameters(cmd *cobra.Command, args []string, params []config.Param, cmdVars map[string]string) {
+	// Process parameters and update cmdVars
+	paramVars, err := processParameters(cmd, args, params)
+	if err != nil {
+		fmt.Printf("Error processing parameters: %v\n", err)
+		exitFunc(1)
+	}
+
+	// Add parameter variables to the command variables
+	for k, v := range paramVars {
+		cmdVars[k] = v
+	}
+}
+
+// tryExecuteSubcommand checks if a subcommand is specified and executes it if found
+// Returns true if a subcommand was executed, false otherwise
+func (r *RootCommand) tryExecuteSubcommand(cmdName string, cmdConfig config.Command, args []string, cmdVars map[string]string) bool {
+	if len(args) > 0 && len(cmdConfig.Commands) > 0 {
+		subCmdName := args[0]
+		_, ok := cmdConfig.Commands[subCmdName]
+		if ok {
+			// Execute the subcommand
+			fullCmdName := fmt.Sprintf("%s:%s", cmdName, subCmdName)
+
+			// Set dry-run flag on the handler
+			r.Handler.SetDryRun(r.DryRun)
+
+			// Use ExecuteCommand which will internally call executeCommandWithDependencies
+			if err := r.Handler.ExecuteCommand(fullCmdName, cmdVars); err != nil {
+				fmt.Printf("Error executing subcommand '%s': %v\n", fullCmdName, err)
+				exitFunc(1)
+			}
+			return true
+		}
+	}
+	return false
+}
+
+// executeMainCommand executes the main command with the given variables
+func (r *RootCommand) executeMainCommand(cmdName string, cmdVars map[string]string) {
+	// Set dry-run flag on the handler
+	r.Handler.SetDryRun(r.DryRun)
+
+	// Execute the command with variables
+	if err := r.Handler.ExecuteCommand(cmdName, cmdVars); err != nil {
+		fmt.Printf("Error executing command '%s': %v\n", cmdName, err)
+		exitFunc(1)
+	}
+}
+
+// addSubcommandsToCommand adds subcommands to a parent cobra.Command
+func (r *RootCommand) addSubcommandsToCommand(parentCmd *cobra.Command, parentName string, subCommands map[string]config.Command) {
+	// Skip if no subcommands are defined
+	if len(subCommands) == 0 {
+		return
+	}
+
+	for subName, subCmd := range subCommands {
+		// Create a local copy for the closure
+		subCmdName := subName
+		subCmdConfig := subCmd
+
+		// Create the subcommand
+		subCobraCmd := &cobra.Command{
+			Use:   subCmdName,
+			Short: subCmdConfig.Description,
+			Long:  subCmdConfig.Description,
 			Run: func(cmd *cobra.Command, args []string) {
-				// Create a variables map with global variables
-				cmdVars := make(map[string]string)
-				if r.Config != nil {
-					for k, v := range r.Config.Variables {
-						cmdVars[k] = v
-					}
-				}
+				// Create command variables
+				cmdVars := r.createCommandVariables()
 
-				// Process parameters if defined
-				if len(cmdConfig.Params) > 0 {
-					// Process parameters and update cmdVars
-					paramVars, err := processParameters(cmd, args, cmdConfig.Params)
-					if err != nil {
-						fmt.Printf("Error processing parameters: %v\n", err)
-						exitFunc(1)
-					}
-
-					// Add parameter variables to the command variables
-					for k, v := range paramVars {
-						cmdVars[k] = v
-					}
-				}
-
-				// Check if this command has a subcommand specified
-				if len(args) > 0 && len(cmdConfig.Commands) > 0 {
-					subCmdName := args[0]
-					_, ok := cmdConfig.Commands[subCmdName]
-					if ok {
-						// Execute the subcommand
-						fullCmdName := fmt.Sprintf("%s:%s", cmdName, subCmdName)
-
-						// Set dry-run flag on the handler
-						r.Handler.SetDryRun(r.DryRun)
-
-						// Use ExecuteCommand which will internally call executeCommandWithDependencies
-						if err := r.Handler.ExecuteCommand(fullCmdName, cmdVars); err != nil {
-							fmt.Printf("Error executing subcommand '%s': %v\n", fullCmdName, err)
-							exitFunc(1)
-						}
-						return
-					}
-				}
+				// Execute the subcommand
+				fullCmdName := fmt.Sprintf("%s:%s", parentName, subCmdName)
 
 				// Set dry-run flag on the handler
 				r.Handler.SetDryRun(r.DryRun)
 
-				// Execute the command with variables
-				if err := r.Handler.ExecuteCommand(cmdName, cmdVars); err != nil {
-					fmt.Printf("Error executing command '%s': %v\n", cmdName, err)
+				// Execute the command
+				if err := r.Handler.ExecuteCommand(fullCmdName, cmdVars); err != nil {
+					fmt.Printf("Error executing subcommand '%s': %v\n", fullCmdName, err)
 					exitFunc(1)
 				}
 			},
 		}
 
-		// Add parameters if defined
-		if len(cmdConfig.Params) > 0 {
-			addParametersToCommand(cobraCmd, cmdConfig.Params)
+		// Add parameters to the subcommand if defined
+		if len(subCmdConfig.Params) > 0 {
+			addParametersToCommand(subCobraCmd, subCmdConfig.Params)
 		}
 
-		// Add subcommands if defined
-		if len(cmdConfig.Commands) > 0 {
-			for subName, subCmd := range cmdConfig.Commands {
-				// Create a local copy for the closure
-				subCmdName := subName
-				subCmdConfig := subCmd
-
-				// Create the subcommand
-				subCobraCmd := &cobra.Command{
-					Use:   subCmdName,
-					Short: subCmdConfig.Description,
-					Long:  subCmdConfig.Description,
-					Run: func(cmd *cobra.Command, args []string) {
-						// Create variables map with parent command variables
-						cmdVars := make(map[string]string)
-						if r.Config != nil {
-							for k, v := range r.Config.Variables {
-								cmdVars[k] = v
-							}
-						}
-
-						// Execute the subcommand
-						fullCmdName := fmt.Sprintf("%s:%s", cmdName, subCmdName)
-
-						// Set dry-run flag on the handler
-						r.Handler.SetDryRun(r.DryRun)
-
-						// Execute the command
-						if err := r.Handler.ExecuteCommand(fullCmdName, cmdVars); err != nil {
-							fmt.Printf("Error executing subcommand '%s': %v\n", fullCmdName, err)
-							exitFunc(1)
-						}
-					},
-				}
-
-				// Add parameters to the subcommand if defined
-				if len(subCmdConfig.Params) > 0 {
-					addParametersToCommand(subCobraCmd, subCmdConfig.Params)
-				}
-
-				// Add the subcommand to the parent command
-				cobraCmd.AddCommand(subCobraCmd)
-			}
-		}
-
-		// Add the command to the root command
-		r.RootCmd.AddCommand(cobraCmd)
+		// Add the subcommand to the parent command
+		parentCmd.AddCommand(subCobraCmd)
 	}
 }
 
